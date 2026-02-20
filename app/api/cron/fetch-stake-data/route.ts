@@ -1,18 +1,32 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@vercel/postgres';
 import { ethers } from 'ethers';
-import { CONTRACT_ADDRESS, CONTRACT_ABI, LOCK_DAYS_MAP, getProvider, getContract } from '@/lib/contract';
+
+const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL!;
+const CONTRACT_ADDRESS = process.env.STAKING_CONTRACT_ADDRESS!;
+const CONTRACT_ABI = JSON.parse(process.env.STAKING_CONTRACT_ABI || '[]');
+
+// 锁仓天数映射
+const LOCK_DAYS_MAP: { [key: number]: number } = {
+  0: 1,   // index 0 锁仓1天
+  1: 15,  // index 1 锁仓15天
+  2: 30   // index 2 锁仓30天
+};
 
 export async function GET(request: Request) {
   // 验证cron请求
   const authHeader = request.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  const url = new URL(request.url);
+  const authParam = url.searchParams.get('auth');
+  const isValidCron = authHeader === `Bearer ${process.env.CRON_SECRET}` || authParam === process.env.CRON_SECRET;
+
+  if (!isValidCron) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
-    const provider = getProvider();
-    const contract = getContract(provider);
+    const provider = new ethers.JsonRpcProvider(RPC_URL);
+    const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
     
     const currentBlock = await provider.getBlockNumber();
     const currentTimestamp = Math.floor(Date.now() / 1000);
@@ -54,41 +68,49 @@ export async function GET(request: Request) {
 
     for (const event of stakedEvents) {
       const block = await event.getBlock();
-      if (block.timestamp >= startOfDay && event.args) {
-        const amount = ethers.formatEther(event.args.amount);
-        const user = event.args.user;
-        const stakeIndex = Number(event.args.index);
-        const stakeTime = Number(event.args.stakeTime);
-        const lockDays = LOCK_DAYS_MAP[stakeIndex] || 0;
-        const unlockTime = stakeTime + lockDays * 86400;
+      if (block.timestamp >= startOfDay) {
+        // 安全地获取事件参数
+        const parsedEvent = contract.interface.parseLog({
+          topics: event.topics,
+          data: event.data
+        });
         
-        todayNewStake += parseFloat(amount);
-        todayStakeCount++;
+        if (parsedEvent && parsedEvent.args) {
+          const amount = ethers.formatEther(parsedEvent.args.amount);
+          const user = parsedEvent.args.user;
+          const stakeIndex = Number(parsedEvent.args.index);
+          const stakeTime = Number(parsedEvent.args.stakeTime);
+          const lockDays = LOCK_DAYS_MAP[stakeIndex] || 0;
+          const unlockTime = stakeTime + lockDays * 86400;
+          
+          todayNewStake += parseFloat(amount);
+          todayStakeCount++;
 
-        // 保存质押记录
-        try {
-          await sql`
-            INSERT INTO stake_records (
-              user_address, stake_index, amount, stake_time, 
-              stake_timestamp, unlock_time, unlock_timestamp,
-              lock_days, tx_hash, block_number, status
-            ) VALUES (
-              ${user},
-              ${stakeIndex},
-              ${amount},
-              ${stakeTime},
-              to_timestamp(${stakeTime}),
-              ${unlockTime},
-              to_timestamp(${unlockTime}),
-              ${lockDays},
-              ${event.transactionHash},
-              ${event.blockNumber},
-              'active'
-            )
-            ON CONFLICT (tx_hash) DO NOTHING
-          `;
-        } catch (e) {
-          console.log('插入质押记录失败:', e);
+          // 保存质押记录
+          try {
+            await sql`
+              INSERT INTO stake_records (
+                user_address, stake_index, amount, stake_time, 
+                stake_timestamp, unlock_time, unlock_timestamp,
+                lock_days, tx_hash, block_number, status
+              ) VALUES (
+                ${user},
+                ${stakeIndex},
+                ${amount},
+                ${stakeTime},
+                to_timestamp(${stakeTime}),
+                ${unlockTime},
+                to_timestamp(${unlockTime}),
+                ${lockDays},
+                ${event.transactionHash},
+                ${event.blockNumber},
+                'active'
+              )
+              ON CONFLICT (tx_hash) DO NOTHING
+            `;
+          } catch (e) {
+            console.log('插入质押记录失败:', e);
+          }
         }
       }
     }
@@ -102,27 +124,35 @@ export async function GET(request: Request) {
 
     for (const event of unstakeEvents) {
       const block = await event.getBlock();
-      if (block.timestamp >= startOfDay && event.args) {
-        const reward = ethers.formatEther(event.args.reward);
-        const user = event.args.user;
-        const index = Number(event.args.index);
+      if (block.timestamp >= startOfDay) {
+        // 安全地获取事件参数
+        const parsedEvent = contract.interface.parseLog({
+          topics: event.topics,
+          data: event.data
+        });
         
-        todayUnstake += parseFloat(reward);
-        todayUnstakeCount++;
+        if (parsedEvent && parsedEvent.args) {
+          const reward = ethers.formatEther(parsedEvent.args.reward);
+          const user = parsedEvent.args.user;
+          const index = Number(parsedEvent.args.index);
+          
+          todayUnstake += parseFloat(reward);
+          todayUnstakeCount++;
 
-        // 更新对应质押记录状态
-        await sql`
-          UPDATE stake_records 
-          SET status = 'unstaked',
-              unstake_time = ${block.timestamp},
-              unstake_timestamp = to_timestamp(${block.timestamp})
-          WHERE user_address = ${user}
-            AND stake_index = ${index}
-            AND status = 'active'
-            AND unlock_time <= ${block.timestamp}
-          ORDER BY stake_time ASC
-          LIMIT 1
-        `;
+          // 更新对应质押记录状态
+          await sql`
+            UPDATE stake_records 
+            SET status = 'unstaked',
+                unstake_time = ${block.timestamp},
+                unstake_timestamp = to_timestamp(${block.timestamp})
+            WHERE user_address = ${user}
+              AND stake_index = ${index}
+              AND status = 'active'
+              AND unlock_time <= ${block.timestamp}
+            ORDER BY stake_time ASC
+            LIMIT 1
+          `;
+        }
       }
     }
 
@@ -273,4 +303,4 @@ export async function GET(request: Request) {
 }
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60; // 设置最大执行时间为60秒
+export const maxDuration = 60;

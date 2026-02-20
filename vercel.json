@@ -1,0 +1,44 @@
+{
+  "name": "gana-staking-dapp",
+  "version": 2,
+  "builds": [
+    {
+      "src": "*.html",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "public/*",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        }
+      ]
+    }
+  ],
+  "env": {
+    "CONTRACT_ADDRESS": "0x72212F35aC448FE7763aA1BFdb360193Fa098E52",
+    "LP_CONTRACT_ADDRESS": "0xa2f464a2462aed49b9b31eb8861bc6b0bbb0483f",
+    "NETWORK": "bsc"
+  }
+}

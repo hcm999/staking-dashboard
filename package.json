@@ -1,19 +1,15 @@
 {
-  "name": "stake-dapp-vercel",
-  "version": "2.0.0",
-  "description": "GANA质押管理平台 - 基于Vercel部署",
-  "main": "index.html",
+  "name": "staking-monitor",
+  "version": "1.0.0",
+  "description": "GANA质押数据监控平台",
   "scripts": {
-    "dev": "serve -s .",
-    "start": "serve -s ."
+    "dev": "vercel dev",
+    "deploy": "vercel deploy --prod"
   },
   "dependencies": {
     "ethers": "^6.7.0"
   },
   "devDependencies": {
-    "serve": "^14.2.1"
-  },
-  "engines": {
-    "node": ">=18.0.0"
+    "vercel": "^32.0.0"
   }
 }

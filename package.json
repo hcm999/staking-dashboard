@@ -1,0 +1,19 @@
+{
+  "name": "stake-dapp-vercel",
+  "version": "2.0.0",
+  "description": "GANA质押管理平台 - 基于Vercel部署",
+  "main": "index.html",
+  "scripts": {
+    "dev": "serve -s .",
+    "start": "serve -s ."
+  },
+  "dependencies": {
+    "ethers": "^6.7.0"
+  },
+  "devDependencies": {
+    "serve": "^14.2.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

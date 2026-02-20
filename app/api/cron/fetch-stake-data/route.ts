@@ -59,7 +59,7 @@ export async function GET(request: Request) {
     }
 
     // 2. 获取Staked事件（今日新增质押）
-    const fromBlock = Math.max(0, currentBlock - 20000); // 最近2万个块
+    const fromBlock = Math.max(0, currentBlock - 20000);
     const stakedFilter = contract.filters.Staked();
     const stakedEvents = await contract.queryFilter(stakedFilter, fromBlock, currentBlock);
     
@@ -70,16 +70,11 @@ export async function GET(request: Request) {
       const block = await event.getBlock();
       if (block.timestamp >= startOfDay) {
         // 安全地获取事件参数
-        const parsedEvent = contract.interface.parseLog({
-          topics: event.topics,
-          data: event.data
-        });
-        
-        if (parsedEvent && parsedEvent.args) {
-          const amount = ethers.formatEther(parsedEvent.args.amount);
-          const user = parsedEvent.args.user;
-          const stakeIndex = Number(parsedEvent.args.index);
-          const stakeTime = Number(parsedEvent.args.stakeTime);
+        if (event.args) {
+          const amount = ethers.formatEther(event.args[0]);
+          const user = event.args[1];
+          const stakeIndex = Number(event.args[2]);
+          const stakeTime = Number(event.args[3]);
           const lockDays = LOCK_DAYS_MAP[stakeIndex] || 0;
           const unlockTime = stakeTime + lockDays * 86400;
           
@@ -125,16 +120,10 @@ export async function GET(request: Request) {
     for (const event of unstakeEvents) {
       const block = await event.getBlock();
       if (block.timestamp >= startOfDay) {
-        // 安全地获取事件参数
-        const parsedEvent = contract.interface.parseLog({
-          topics: event.topics,
-          data: event.data
-        });
-        
-        if (parsedEvent && parsedEvent.args) {
-          const reward = ethers.formatEther(parsedEvent.args.reward);
-          const user = parsedEvent.args.user;
-          const index = Number(parsedEvent.args.index);
+        if (event.args) {
+          const reward = ethers.formatEther(event.args[0]);
+          const user = event.args[1];
+          const index = Number(event.args[2]);
           
           todayUnstake += parseFloat(reward);
           todayUnstakeCount++;

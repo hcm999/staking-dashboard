@@ -4281,39 +4281,14 @@
         }
 
         // ================= 重新计算所有每日统计 =================
-        function recalcAllDailyStats() {
-            const dailyStats = new Map();
-            const activeDaily = new Map();
-            
-            const records = allStakeRecords.length > 0 ? allStakeRecords : queryResults;
-            
-            records.forEach(record => {
-                const dateStr = getDateStrFromTimestamp(record.stakeTime);
-                
-                if (!dailyStats.has(dateStr)) {
-                    dailyStats.set(dateStr, {
-                        newStake: 0,
-                        byPool: {0: 0, 1: 0, 2: 0},
-                        count: {0: 0, 1: 0, 2: 0}
-                    });
-                }
-                
-                const dayData = dailyStats.get(dateStr);
-                dayData.newStake += record.amount;
-                dayData.byPool[record.stakeIndex] += record.amount;
-                dayData.count[record.stakeIndex]++;
-                
-                if (!record.isRedeemed) {
-                    if (!activeDaily.has(dateStr)) {
-                        activeDaily.set(dateStr, 0);
-                    }
-                    activeDaily.set(dateStr, activeDaily.get(dateStr) + record.amount);
-                }
-            });
-            
-            renderDailyStats(dailyStats, activeDaily);
-            updateAllCharts();  // 数据更新后刷新图表
-        }
+        // 修改 recalcAllDailyStats 函数
+function recalcAllDailyStats() {
+    // 只有当需要重新计算时才调用
+    regenerateDailyStatsTable();
+    
+    // 更新图表（如果需要）
+    updateAllCharts();
+}
 
         // ================= 数据持久化 =================
         function saveToStorage() {
@@ -4321,7 +4296,7 @@
                 const data = {
                     addressList: document.getElementById('addressList').value,
                     lastAddressList: lastAddressList,
-                    stats: stats,
+                    stats: stats,  // 确保这里保存了统计数据
                     queryResults: queryResults,
                     allStakeRecords: allStakeRecords,
                     addressCache: Array.from(addressCache.entries()),
@@ -4337,57 +4312,105 @@
         }
 
         function loadFromStorage() {
-            try {
-                const saved = localStorage.getItem(CONFIG.STORAGE_KEY);
-                if (!saved) return false;
-                
-                const data = JSON.parse(saved);
-                
-                // 恢复地址列表
-                if (data.addressList) {
-                    document.getElementById('addressList').value = data.addressList;
-                    updateAddressCount();
-                }
-                lastAddressList = data.lastAddressList || '';
-                
-                // 恢复统计数据
-                if (data.stats) {
-                    stats = data.stats;
-                }
-                
-                // 恢复查询结果
-                if (data.queryResults) {
-                    queryResults = data.queryResults;
-                }
-                
-                if (data.allStakeRecords) {
-                    allStakeRecords = data.allStakeRecords;
-                }
-                
-                // 恢复缓存
-                if (data.addressCache) {
-                    addressCache = new Map(data.addressCache);
-                }
-                
-                if (data.recordCache) {
-                    recordCache = new Map(data.recordCache);
-                }
-                
-                // 恢复起始时间设置
-                if (data.dailyStartHour !== undefined) {
-                    dailyStartHour = data.dailyStartHour;
-                    document.getElementById('dailyStartTime').value = dailyStartHour;
-                    updateTimezoneDisplay();
-                }
-                
-                console.log(`已加载上次数据，时间: ${new Date(data.timestamp).toLocaleString()}`);
-                return true;
-            } catch (e) {
-                console.error('加载数据失败:', e);
-                return false;
-            }
+    try {
+        const saved = localStorage.getItem(CONFIG.STORAGE_KEY);
+        if (!saved) return false;
+        
+        const data = JSON.parse(saved);
+        
+        // 恢复地址列表
+        if (data.addressList) {
+            document.getElementById('addressList').value = data.addressList;
+            updateAddressCount();
         }
+        lastAddressList = data.lastAddressList || '';
+        
+        // 恢复统计数据 - 直接使用保存的数据，不重新计算
+        if (data.stats) {
+            stats = data.stats;
+        }
+        
+        // 恢复查询结果
+        if (data.queryResults) {
+            queryResults = data.queryResults;
+        }
+        
+        if (data.allStakeRecords) {
+            allStakeRecords = data.allStakeRecords;
+        }
+        
+        // 恢复缓存
+        if (data.addressCache) {
+            addressCache = new Map(data.addressCache);
+        }
+        
+        if (data.recordCache) {
+            recordCache = new Map(data.recordCache);
+        }
+        
+        // 恢复起始时间设置
+        if (data.dailyStartHour !== undefined) {
+            dailyStartHour = data.dailyStartHour;
+            document.getElementById('dailyStartTime').value = dailyStartHour;
+            updateTimezoneDisplay();
+        }
+        
+        console.log(`已加载上次数据，时间: ${new Date(data.timestamp).toLocaleString()}`);
+        
+        // 渲染数据，但不重新计算每日统计
+        renderResults();
+        updateStats();
+        
+        // 重新生成每日统计表格（基于allStakeRecords，但不影响stats）
+        regenerateDailyStatsTable();
+        
+        // 更新图表
+        updateAllCharts();
+        
+        return true;
+    } catch (e) {
+        console.error('加载数据失败:', e);
+        return false;
+    }
+}
 
+        // 新增函数：仅用于生成每日统计表格，不影响全局stats
+function regenerateDailyStatsTable() {
+    if (!allStakeRecords || allStakeRecords.length === 0) {
+        document.getElementById('dailyStatsBody').innerHTML = '<tr><td colspan="6" class="empty-state">📊 暂无数据</td></tr>';
+        return;
+    }
+    
+    const dailyStats = new Map();
+    const activeDaily = new Map();
+    
+    allStakeRecords.forEach(record => {
+        const dateStr = getDateStrFromTimestamp(record.stakeTime);
+        
+        if (!dailyStats.has(dateStr)) {
+            dailyStats.set(dateStr, {
+                newStake: 0,
+                byPool: {0: 0, 1: 0, 2: 0},
+                count: {0: 0, 1: 0, 2: 0}
+            });
+        }
+        
+        const dayData = dailyStats.get(dateStr);
+        dayData.newStake += record.amount;
+        dayData.byPool[record.stakeIndex] += record.amount;
+        dayData.count[record.stakeIndex]++;
+        
+        if (!record.isRedeemed) {
+            if (!activeDaily.has(dateStr)) {
+                activeDaily.set(dateStr, 0);
+            }
+            activeDaily.set(dateStr, activeDaily.get(dateStr) + record.amount);
+        }
+    });
+    
+    renderDailyStats(dailyStats, activeDaily);
+}
+        
         function loadLastQuery() {
             if (loadFromStorage()) {
                 recalcAllDailyStats();
@@ -4517,11 +4540,15 @@
             document.getElementById(`tab-${tab}`).classList.add('active');
             document.getElementById(`panel-${tab}`).classList.add('active');
 
-            // 切换到图表选项卡时更新图表
-            if (tab === 'charts') {
-                updateAllCharts();
-            }
-        }
+            // 切换到图表选项卡时更新图表（但使用当前数据，不重新计算）
+    if (tab === 'charts') {
+        // 使用当前数据更新图表，不重新计算
+        if (trendChart) trendChart.destroy();
+        if (pieChart) pieChart.destroy();
+        if (unlockChart) unlockChart.destroy();
+        updateAllCharts();
+    }
+}
 
         // ================= 图表范围切换 (包含90天) =================
         function setTrendRange(days) {

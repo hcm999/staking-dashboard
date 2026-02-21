@@ -9,6 +9,7 @@
     <!-- 引入 Ethers.js V6 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
     <style>
+        /* 样式保持不变 */
         * {
             margin: 0;
             padding: 0;
@@ -29,7 +30,6 @@
             padding: 0;
         }
         
-        /* 统计卡片 - 手机优化 */
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
@@ -96,7 +96,6 @@
             white-space: nowrap;
         }
         
-        /* 周期标签 */
         .badge-duration { 
             padding: 3px 8px; 
             border-radius: 16px; 
@@ -119,7 +118,6 @@
             color: white;
         }
         
-        /* 表格样式 - 手机优化 */
         .table-container {
             background: linear-gradient(145deg, #1e293b, #0f172a);
             border-radius: 16px;
@@ -161,7 +159,6 @@
             vertical-align: middle;
         }
         
-        /* 地址样式 */
         .address-cell {
             font-family: 'Courier New', monospace;
             font-size: 0.75rem;
@@ -173,7 +170,6 @@
             white-space: nowrap;
         }
         
-        /* 金额样式 */
         .amount-cell {
             font-family: 'Courier New', monospace;
             font-size: 0.8rem;
@@ -181,7 +177,6 @@
             font-weight: 600;
         }
         
-        /* 时间双行显示 */
         .time-two-lines {
             display: flex;
             flex-direction: column;
@@ -199,7 +194,6 @@
         .status-unlocked { color: #4ade80; font-weight: 500; }
         .status-locked { color: #f87171; font-weight: 500; }
         
-        /* 新增记录高亮 */
         @keyframes highlightNew {
             0% { background-color: rgba(59, 130, 246, 0.3); }
             100% { background-color: transparent; }
@@ -208,15 +202,6 @@
             animation: highlightNew 2s ease-out;
         }
         
-        /* 已赎回记录样式 */
-        .record-redeemed {
-            opacity: 0.6;
-        }
-        .record-redeemed td {
-            background-color: rgba(100, 116, 139, 0.1);
-        }
-        
-        /* 地址输入区域 - 手机优化 */
         .address-input-area {
             background: linear-gradient(145deg, #1e293b, #0f172a);
             border: 1px solid #334155;
@@ -313,7 +298,6 @@
             color: white;
         }
         
-        /* 进度条 */
         .progress-container {
             margin-top: 16px;
             padding: 12px;
@@ -342,7 +326,6 @@
             text-align: center;
         }
         
-        /* 头部样式 - 手机优化 */
         .header {
             margin-bottom: 16px;
             padding-bottom: 12px;
@@ -377,7 +360,6 @@
             word-break: break-all;
         }
         
-        /* 导出按钮 */
         .btn-export {
             background-color: #334155;
             border: 1px solid #475569;
@@ -395,7 +377,6 @@
             }
         }
         
-        /* 统计信息行 */
         .stats-info {
             display: flex;
             justify-content: space-between;
@@ -410,7 +391,6 @@
             margin: 0;
         }
         
-        /* 空状态 */
         .empty-state {
             text-align: center;
             padding: 40px 12px;
@@ -418,14 +398,12 @@
             font-size: 0.9rem;
         }
         
-        /* 地址计数 */
         .address-count {
             font-size: 0.75rem;
             color: #94a3b8;
             margin-top: 4px;
         }
         
-        /* 查询模式指示器 */
         .query-mode {
             display: inline-block;
             padding: 2px 8px;
@@ -442,7 +420,6 @@
             color: white;
         }
         
-        /* 选项卡样式 */
         .data-tabs {
             display: flex;
             gap: 10px;
@@ -470,7 +447,6 @@
             color: white;
         }
         
-        /* 数据面板 */
         .data-panel {
             display: none;
         }
@@ -544,7 +520,7 @@
 
         <!-- 地址输入区域 -->
         <div class="address-input-area">
-            <textarea id="addressList" class="address-textarea" placeholder="每行一个地址，最多5000个&#10;例如：&#10;0x72212F35aC448FE7763aA1BFdb360193Fa098E52">0x72212F35aC448FE7763aA1BFdb360193Fa098E52</textarea>
+            <textarea id="addressList" class="address-textarea" placeholder="每行一个地址，最多5000个">0x72212F35aC448FE7763aA1BFdb360193Fa098E52</textarea>
             
             <div class="address-count" id="addressCount">1 个地址</div>
             
@@ -653,7 +629,20 @@
     </div>
 
     <script>
-        // ================= 完整ABI =================
+        // ================= 全局变量声明 =================
+        let stakingContract;
+        let isQuerying = false;
+        let addressCache = new Map();
+        let queryResults = [];
+        let allStakeRecords = [];
+        
+        let stats = {
+            totalStaked: 0, totalStaked1d: 0, totalStaked15d: 0, totalStaked30d: 0,
+            count1d: 0, count15d: 0, count30d: 0,
+            unlock2d: 0, unlock7d: 0, unlock15d: 0
+        };
+
+        // ================= ABI =================
         const ABI_STAKING = [{"inputs":[{"internalType":"address","name":"marketingAddress_","type":"address"},{"internalType":"address","name":"devAddress_","type":"address"},{"internalType":"address","name":"threesevenAddress_","type":"address"}],"stateMutability":"nonpayable","type":"constructor"},{"inputs":[{"internalType":"uint256","name":"x","type":"uint256"},{"internalType":"uint256","name":"y","type":"uint256"}],"name":"PRBMath_MulDiv18_Overflow","type":"error"},{"inputs":[{"internalType":"uint256","name":"x","type":"uint256"},{"internalType":"uint256","name":"y","type":"uint256"},{"internalType":"uint256","name":"denominator","type":"uint256"}],"name":"PRBMath_MulDiv_Overflow","type":"error"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":true,"internalType":"address","name":"newOwner","type":"address"}],"name":"OwnershipTransferred","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"uint256","name":"reward","type":"uint256"},{"indexed":false,"internalType":"uint40","name":"timestamp","type":"uint40"},{"indexed":false,"internalType":"uint256","name":"index","type":"uint256"}],"name":"RewardPaid","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"timestamp","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"index","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"stakeTime","type":"uint256"}],"name":"Staked","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"from","type":"address"},{"indexed":true,"internalType":"address","name":"to","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"Transfer","type":"event"},{"inputs":[],"name":"GANA","outputs":[{"internalType":"contract IGANA","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"MIN_STAKE_USDT","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"back_Fee","outputs":[{"internalType":"uint8","name":"","type":"uint8"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"account","type":"address"}],"name":"balanceOf","outputs":[{"internalType":"uint256","name":"balance","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"balances","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"decimals","outputs":[{"internalType":"uint8","name":"","type":"uint8"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"devAddress","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"user","type":"address"}],"name":"isPreacher","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"market_Fee","outputs":[{"internalType":"uint8","name":"","type":"uint8"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"marketingAddress","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"maxStakeAmount","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"name","outputs":[{"internalType":"string","name":"","type":"string"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"network1In","outputs":[{"internalType":"uint256","name":"value","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"owner","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"user","type":"address"},{"internalType":"uint8","name":"index","type":"uint8"}],"name":"principalPlusRewardOfSlot","outputs":[{"internalType":"uint256","name":"reward","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"ratePerSec","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"_gana","type":"address"}],"name":"setGANA","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint160","name":"_amount","type":"uint160"},{"internalType":"uint256","name":"amountOutMin","type":"uint256"},{"internalType":"uint8","name":"_stakeIndex","type":"uint8"}],"name":"stake","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"user","type":"address"}],"name":"stakeCount","outputs":[{"internalType":"uint256","name":"count","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"symbol","outputs":[{"internalType":"string","name":"","type":"string"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"sync","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"t_supply","outputs":[{"internalType":"uint40","name":"stakeTime","type":"uint40"},{"internalType":"uint160","name":"tamount","type":"uint160"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"threesevenAddress","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"threeseven_Fee","outputs":[{"internalType":"uint8","name":"","type":"uint8"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"totalSupply","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"newOwner","type":"address"}],"name":"transferOwnership","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"index","type":"uint256"}],"name":"unstake","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"userIndex","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"","type":"address"},{"internalType":"uint256","name":"","type":"uint256"}],"name":"userStakeRecord","outputs":[{"internalType":"uint40","name":"stakeTime","type":"uint40"},{"internalType":"uint160","name":"amount","type":"uint160"},{"internalType":"bool","name":"status","type":"bool"},{"internalType":"uint8","name":"stakeIndex","type":"uint8"}],"stateMutability":"view","type":"function"}];
 
         // ================= 配置 =================
@@ -667,7 +656,7 @@
         const STAKE_DURATION_LABELS = {0: "1天", 1: "15天", 2: "30天"};
         const STAKE_DURATION_CLASS = {0: "badge-1d", 1: "badge-15d", 2: "badge-30d"};
 
-        // ================= 测试地址（前50个）=================
+        // ================= 测试地址 =================
         const SAMPLE_ADDRESSES = [
             "0x27551c8b615a5e0d6faaf5cbfee72cbdd8ebfd4d",
             "0xfd600aeab3aecf1908021c84a936cb77cdb419c3",
@@ -678,67 +667,20 @@
             "0x8868252aed526d4e9dc8452ae5e387ead049a562",
             "0xc98833b8b06ce137ff58d73b2adb44971471bb34",
             "0x0cd824c25d08a69c30c528033d7f10d828e36705",
-            "0x4e4db2fdf9e46865d369bfc5f6b9c3e9c13dcce6",
-            "0x7abf0fdfcc1c044b63bb8b73c3b391fa53f0b396",
-            "0xdbcfa46ae9f6e0aa907e80d83ac3d7f26e1944c7",
-            "0x363cd10235f3d4965373b9383d5f0602b2d9ac05",
-            "0xe21aa83ce0d3b3e4b0a98541fcd62e45ea81a52d",
-            "0xe209edc537b8ca1c9482d28138f87cab39b45a7a",
-            "0x8d6a4b46ebcea50bb9b22855a0f63416b0eef6c2",
-            "0x883c8187325678f03091026e0b581eb966142868",
-            "0x84ed9469b90ff1336727bab4d584ff0dfba8f0a8",
-            "0xb58c1179a2dbad9e17bc99438272a3ddefd61189",
-            "0x4b364187b968025c3a58b919d95481d21a956c91",
-            "0xa4902354b38813f3e14e181971c1a548ac62537c",
-            "0xec3924d3f463fdaca92a3cb437b77ce1320e9439",
-            "0x2832e16907b12851202fb312e5900eaa8236cd09",
-            "0xa3ad3461083384fafd6ac3e2bed96edea51913d7",
-            "0x0fd56c0e147ed4d521d0f890e28f8aaa83b9df13",
-            "0x50e6f9c6cfe2437516145d2f70622f93ba158749",
-            "0xe112c120e274e07ee033517739c754d1d70d126a",
-            "0xa27e45d651d4d0601f62d82f67daa53c796846d8",
-            "0x54d9f9ecf39c769db659a642151a8f8481efa34a",
-            "0x04d58ea94c470c8957f4d03bd325862fa48f6abc",
-            "0x4d8ad7cac98a8d6590ce810564d013f6394ecd40",
-            "0x6a40103551b585766f12da35df814d9a98c78893",
-            "0xaeeeb22b2407f7f1b98641df4417e7fb436533de",
-            "0x618547e07678530d242dd978791af7f90b61c738",
-            "0xabbeafde8029a01bb4af77a955d0aed5d66aad5f",
-            "0xd46444be4228398a07c35c09b6823aeecb6eacf2",
-            "0x950126b882c53fa9e787f505504d4a804307fd06",
-            "0x3a0cc7f8fbc2d6d85539df765d2713ba0b0cb018",
-            "0x6119f0be5e936cec570ddfc146da8455d7430d31",
-            "0x557201663bf70005580bf34339a61648d9bc4aaa",
-            "0x1a7e63a05a0d71f297cfb31275bec7e2e7e009ba",
-            "0xc09ee4d7a10defd02b5ef255f533c716aeb0bd08",
-            "0x42c9405b51b9208f405bc131e335b1a0048ffa03",
-            "0xe26b51551362ef0bbfea2cd8ef9c319db69f8721",
-            "0x40ea7b20f554de7382f58d1fdc77ce04b81257e5",
-            "0x0d0674ae059abd497b547747466896dfbb4a4152",
-            "0xfd17ed78a13dfcb3e63ddc043f0ab8e0797a13c4",
-            "0x83a2eaf0acd5e04c9bf0cb457373fb96754be025",
-            "0xa6a53006ff22474a9d2cfcd9821073aeb3340da8",
-            "0x0abb62c3b2cf42311f3cf1b1d4ba633449abe59a"
+            "0x4e4db2fdf9e46865d369bfc5f6b9c3e9c13dcce6"
         ];
 
-        // ================= 全局变量 =================
-        let stakingContract;
-        let isQuerying = false;
-        
-        // 数据缓存
-        let addressCache = new Map(); // 地址 -> {stakeCount, lastUpdate}
-        let queryResults = []; // 活跃的质押记录
-        let allStakeRecords = []; // 所有质押记录（包含已赎回的）
-        let stats = {
-            totalStaked: 0, totalStaked1d: 0, totalStaked15d: 0, totalStaked30d: 0,
-            count1d: 0, count15d: 0, count30d: 0,
-            unlock2d: 0, unlock7d: 0, unlock15d: 0
-        };
-
         // ================= 初始化 =================
-        window.addEventListener('load', async () => {
+        window.addEventListener('load', function() {
+            console.log('页面加载完成，开始初始化...');
+            initContract();
+            
+            // 监听地址输入变化
+            document.getElementById('addressList').addEventListener('input', updateAddressCount);
+        });
+
+        async function initContract() {
             try {
-                // BSC节点列表
                 const BSC_NODES = [
                     'https://bsc-dataseed1.binance.org',
                     'https://bsc-dataseed2.binance.org',
@@ -746,9 +688,6 @@
                     'https://bsc-dataseed4.binance.org'
                 ];
 
-                let connected = false;
-
-                // 尝试直接连接BSC节点
                 for (const node of BSC_NODES) {
                     try {
                         console.log(`尝试连接节点: ${node}`);
@@ -756,25 +695,17 @@
                         await provider.getBlockNumber();
                         stakingContract = new ethers.Contract(CONFIG.STAKING, ABI_STAKING, provider);
                         console.log(`✅ 连接成功: ${node}`);
-                        connected = true;
+                        document.getElementById('stakingContractAddress').innerText = CONFIG.STAKING;
                         break;
                     } catch (e) {
                         console.log(`节点 ${node} 连接失败`);
                     }
                 }
-
-                if (connected) {
-                    document.getElementById('stakingContractAddress').innerText = CONFIG.STAKING;
-                } else {
-                    alert("无法连接到BSC网络，请刷新重试");
-                }
             } catch (error) {
                 console.error("❌ 初始化失败:", error);
+                alert("无法连接到BSC网络，请刷新重试");
             }
-
-            // 监听地址输入变化
-            document.getElementById('addressList').addEventListener('input', updateAddressCount);
-        });
+        }
 
         // ================= 辅助函数 =================
         function updateAddressCount() {
@@ -830,7 +761,6 @@
             if (seconds <= 0) return "已解锁";
             const days = Math.floor(seconds / 86400);
             const hours = Math.floor((seconds % 86400) / 3600);
-            
             if (days > 0) return `${days}d${hours}h`;
             return `${hours}h${Math.floor((seconds % 3600) / 60)}m`;
         }
@@ -840,10 +770,8 @@
                 const d = new Date(timestamp * 1000);
                 const now = new Date();
                 const diff = Math.floor((now - d) / (1000 * 60 * 60 * 24));
-                
                 let date = diff === 0 ? '今天' : diff === 1 ? '昨天' : `${d.getMonth()+1}/${d.getDate()}`;
                 let time = d.toLocaleTimeString('zh-CN', {hour12: false}).slice(0,5);
-                
                 return {date, time};
             } catch {
                 return {date: '-', time: '-'};
@@ -854,7 +782,6 @@
             return addr ? addr.slice(0, 6) + '…' + addr.slice(-4) : '';
         }
 
-        // ================= 更新统计 =================
         function updateStats() {
             document.getElementById('totalStaked').innerText = stats.totalStaked.toFixed(2);
             document.getElementById('totalStaked1d').innerText = stats.totalStaked1d.toFixed(2);
@@ -870,7 +797,6 @@
             document.getElementById('resultCount').innerText = queryResults.length;
         }
 
-        // ================= 切换数据面板 =================
         function switchDataTab(tab) {
             document.getElementById('tab-records').classList.remove('active');
             document.getElementById('tab-daily').classList.remove('active');
@@ -883,6 +809,7 @@
 
         // ================= 全量查询 =================
         async function fullQuery() {
+            console.log('全量查询被点击');
             if (!stakingContract) {
                 alert("❌ 合约未初始化");
                 return;
@@ -925,7 +852,6 @@
                 unlock2d: 0, unlock7d: 0, unlock15d: 0
             };
             
-            // 用于临时统计的 Map
             const tempStats = {
                 totalStaked: 0,
                 byPool: {0: 0, 1: 0, 2: 0},
@@ -933,7 +859,6 @@
                 unlock: {2d: 0, 7d: 0, 15d: 0}
             };
             
-            // 用于每日统计的临时存储
             const dailyStats = new Map();
             const activeDaily = new Map();
 
@@ -947,16 +872,11 @@
             let processed = 0;
             let totalActiveRecords = 0;
 
-            // 分批处理 - 每批20个地址
             for (let i = 0; i < addresses.length; i += 20) {
                 const batch = addresses.slice(i, i + 20);
                 
-                // 并发查询这一批地址
                 const promises = batch.map(async (address) => {
-                    const result = {
-                        active: [],
-                        all: []
-                    };
+                    const result = { active: [], all: [] };
                     
                     try {
                         const count = await stakingContract.stakeCount(address);
@@ -972,7 +892,6 @@
                                 const stakeIndex = Number(record[3]);
                                 const amountNum = parseFloat(ethers.formatUnits(amount, 18));
                                 
-                                // 记录所有质押
                                 result.all.push({
                                     address,
                                     amount: amountNum,
@@ -995,7 +914,6 @@
                                         isRedeemed
                                     });
                                     
-                                    // 更新统计
                                     tempStats.totalStaked += amountNum;
                                     tempStats.byPool[stakeIndex] += amountNum;
                                     tempStats.byPoolCount[stakeIndex]++;
@@ -1005,7 +923,6 @@
                                     if (unlockTime <= limits['15d']) tempStats.unlock['15d'] += amountNum;
                                 }
                                 
-                                // 每日统计
                                 const date = new Date(stakeTime * 1000);
                                 const dateStr = date.toLocaleDateString('zh-CN', { 
                                     year: 'numeric', 
@@ -1058,7 +975,6 @@
                 document.getElementById('progressText').innerHTML = 
                     `查询中 ${processed}/${addresses.length} (找到 ${totalActiveRecords} 条活跃记录)`;
                 
-                // 实时更新统计
                 stats.totalStaked = tempStats.totalStaked;
                 stats.totalStaked1d = tempStats.byPool[0];
                 stats.totalStaked15d = tempStats.byPool[1];
@@ -1075,7 +991,6 @@
                 await new Promise(r => setTimeout(r, 50));
             }
 
-            // 按时间倒序排序
             queryResults.sort((a, b) => b.stakeTime - a.stakeTime);
             
             renderResults();
@@ -1093,6 +1008,7 @@
 
         // ================= 增量查询 =================
         async function incrementalQuery() {
+            console.log('增量查询被点击');
             if (!stakingContract) {
                 alert("❌ 合约未初始化");
                 return;
@@ -1136,11 +1052,9 @@
             let newRecords = 0;
             let redeemedRecords = 0;
 
-            // 用于每日统计
             const dailyStats = new Map();
             const activeDaily = new Map();
 
-            // 分批处理 - 每批20个地址
             for (let i = 0; i < addresses.length; i += 20) {
                 const batch = addresses.slice(i, i + 20);
                 
@@ -1152,7 +1066,6 @@
                         const currentCount = await stakingContract.stakeCount(address);
                         const cached = addressCache.get(address);
                         
-                        // 如果没有缓存，全量查询这个地址
                         if (!cached) {
                             for (let j = 0; j < Number(currentCount); j++) {
                                 try {
@@ -1164,7 +1077,6 @@
                                     const stakeIndex = Number(record[3]);
                                     const amountNum = parseFloat(ethers.formatUnits(amount, 18));
                                     
-                                    // 记录所有质押
                                     allStakeRecords.push({
                                         address,
                                         amount: amountNum,
@@ -1208,7 +1120,6 @@
                                 } catch (e) {}
                             }
                         } else {
-                            // 有缓存，只查询新增的
                             for (let j = cached.count; j < Number(currentCount); j++) {
                                 try {
                                     const record = await stakingContract.userStakeRecord(address, j);
@@ -1262,7 +1173,6 @@
                                 } catch (e) {}
                             }
                             
-                            // 检查是否有赎回的记录
                             for (let j = 0; j < cached.count; j++) {
                                 try {
                                     const record = await stakingContract.userStakeRecord(address, j);
@@ -1270,7 +1180,6 @@
                                     const stakeTime = Number(record[0]);
                                     const isRedeemed = record[2];
                                     
-                                    // 如果之前是活跃的但现在已赎回
                                     if (isRedeemed) {
                                         const index = queryResults.findIndex(r => 
                                             r.address === address && r.stakeTime === stakeTime
@@ -1297,7 +1206,6 @@
                             }
                         }
                         
-                        // 更新缓存
                         addressCache.set(address, { count: Number(currentCount), lastUpdate: Date.now() });
                         
                     } catch (e) {
@@ -1324,10 +1232,6 @@
                 await new Promise(r => setTimeout(r, 50));
             }
 
-            // 重新计算每日统计
-            const dailyStats = new Map();
-            const activeDaily = new Map();
-            
             allStakeRecords.forEach(record => {
                 const date = new Date(record.stakeTime * 1000);
                 const dateStr = date.toLocaleDateString('zh-CN', { 
@@ -1357,7 +1261,6 @@
                 }
             });
 
-            // 重新排序并渲染
             queryResults.sort((a, b) => b.stakeTime - a.stakeTime);
             renderResults(true);
             renderDailyStats(dailyStats, activeDaily);
@@ -1437,8 +1340,11 @@
         }
 
         function copyAddress(address) {
-            navigator.clipboard.writeText(address);
-            alert('地址已复制');
+            navigator.clipboard.writeText(address).then(() => {
+                alert('地址已复制');
+            }).catch(() => {
+                alert('复制失败');
+            });
         }
 
         // ================= 导出CSV =================
@@ -1477,7 +1383,6 @@
                 return;
             }
 
-            // 重新计算每日统计
             const dailyMap = new Map();
             const activeMap = new Map();
             
@@ -1535,6 +1440,18 @@
             link.download = `每日统计_${new Date().toLocaleDateString()}.csv`;
             link.click();
         }
+
+        // ================= 将函数暴露到全局 =================
+        window.fullQuery = fullQuery;
+        window.incrementalQuery = incrementalQuery;
+        window.resetQuery = resetQuery;
+        window.switchDataTab = switchDataTab;
+        window.addAddress = addAddress;
+        window.addSampleAddresses = addSampleAddresses;
+        window.clearAddresses = clearAddresses;
+        window.exportCSV = exportCSV;
+        window.exportDailyStats = exportDailyStats;
+        window.copyAddress = copyAddress;
     </script>
 </body>
 </html>

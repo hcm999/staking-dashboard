@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
-    <title>GANA质押数据监控平台 + 图表</title>
+    <title>GANA质押数据监控平台 + 图表(范围可选)</title>
     <!-- 引入 Bootstrap 用于快速布局 -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- 引入 Chart.js 轻量图表库 (不影响原有逻辑) -->
+    <!-- 引入 Chart.js 轻量图表库 -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <!-- 引入 Ethers.js V6 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
@@ -521,7 +521,7 @@
             border: 1px solid #334155;
         }
 
-        /* 新增图表卡片样式 */
+        /* 新增图表卡片样式及范围选择器 */
         .chart-grid {
             display: grid;
             grid-template-columns: 1fr;
@@ -547,6 +547,27 @@
             display: flex;
             align-items: center;
             gap: 6px;
+            justify-content: space-between;
+            flex-wrap: wrap;
+        }
+        .chart-range-selector {
+            display: flex;
+            gap: 8px;
+        }
+        .range-btn {
+            background-color: #334155;
+            border: 1px solid #475569;
+            color: #94a3b8;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .range-btn.active {
+            background: #3b82f6;
+            border-color: #60a5fa;
+            color: white;
         }
         .chart-container {
             position: relative;
@@ -560,7 +581,7 @@
         <!-- 头部 -->
         <div class="header">
             <h1>🔍 GANA 质押数据监控平台 <span id="queryMode" class="query-mode mode-cached">缓存数据</span></h1>
-            <div class="subtitle">批量查询 · 增量更新 · 数据持久化 · 支持5000+地址 · 新增图表</div>
+            <div class="subtitle">批量查询 · 增量更新 · 数据持久化 · 图表范围可选</div>
             <div class="contract-address" id="stakingContractAddress">0x72212F35aC448FE7763aA1BFdb360193Fa098E52</div>
         </div>
 
@@ -612,7 +633,7 @@
                 <div class="stat-sub">USDT</div>
             </div>
             <div class="stat-card">
-                <div class="stat-title">地址数</div>
+                <div class="stat-title">记录数</div>
                 <div class="stat-value" id="totalAddresses">0</div>
                 <div class="stat-sub">/5000</div>
             </div>
@@ -637,14 +658,14 @@
                     <option value="11">11:00 (UTC+11)</option>
                     <option value="12">12:00 (UTC+12)</option>
                 </select>
-                <span class="timezone-info" id="timezoneDisplay">当前: 北京时间 (UTC+8) 08:00</span>
+                <span class="timezone-info" id="timezoneDisplay">当前: (UTC+0) 00:00</span>
             </div>
             <div class="config-row" style="margin-top: 8px;">
                 <span class="config-label">💡 说明：每日从所选时间开始计算，例如选择08:00则从早上8点到次日早上8点为一天</span>
             </div>
         </div>
 
-        <!-- 地址输入区域 -->
+        <!-- 地址输入区域 (简化测试地址) -->
         <div class="address-input-area">
             <textarea id="addressList" class="address-textarea" placeholder="每行一个地址，最多5000个&#10;例如：&#10;0x72212F35aC448FE7763aA1BFdb360193Fa098E52">0x72212F35aC448FE7763aA1BFdb360193Fa098E52</textarea>
             
@@ -654,7 +675,8 @@
                 <span class="example-tag" onclick="addAddress('0x72212F35aC448FE7763aA1BFdb360193Fa098E52')">➕ 合约</span>
                 <span class="example-tag" onclick="addAddress('0x55d398326f99059fF775485246999027B3197955')">➕ USDT</span>
                 <span class="example-tag" onclick="addAddress('0xa2f464a2462aed49b9b31eb8861bc6b0bbb0483f')">➕ LP池</span>
-                <span class="example-tag" onclick="addSampleAddresses()">📝 测试(3280地址)</span>
+                <!-- 保留几个测试地址方便快速测试 -->
+                <span class="example-tag" onclick="addSampleAddresses()">📝 测试(3地址)</span>
                 <span class="example-tag" onclick="clearAddresses()">🗑️ 清空</span>
                 <span class="example-tag" onclick="loadLastQuery()">📂 加载上次查询</span>
             </div>
@@ -755,12 +777,19 @@
             </div>
         </div>
 
-        <!-- 新增图表面板 -->
+        <!-- 新增图表面板 (带范围选择) -->
         <div id="panel-charts" class="data-panel">
             <div class="chart-grid">
-                <!-- 每日新增质押趋势图 -->
+                <!-- 每日新增质押趋势图 (带范围切换) -->
                 <div class="chart-card">
-                    <div class="chart-title">📈 每日新增质押趋势</div>
+                    <div class="chart-title">
+                        <span>📈 每日新增质押趋势</span>
+                        <div class="chart-range-selector">
+                            <span class="range-btn active" onclick="setTrendRange(7)">7天</span>
+                            <span class="range-btn" onclick="setTrendRange(15)">15天</span>
+                            <span class="range-btn" onclick="setTrendRange(30)">30天</span>
+                        </div>
+                    </div>
                     <div class="chart-container">
                         <canvas id="trendChart"></canvas>
                     </div>
@@ -773,7 +802,7 @@
                     </div>
                 </div>
             </div>
-            <!-- 额外: 解锁时间分布柱状图 (可选) 为了简洁只加两个图表，但可以再加一个小的 -->
+            <!-- 额外: 解锁时间分布柱状图 -->
             <div class="chart-card" style="margin-top:16px;">
                 <div class="chart-title">⏳ 解锁时间分布 (未来可赎回)</div>
                 <div class="chart-container" style="height:200px;">
@@ -784,7 +813,7 @@
     </div>
 
     <script>
-        // ================= 完整ABI =================
+        // ================= 完整ABI (保持不变) =================
         const ABI_STAKING = [{"inputs":[{"internalType":"address","name":"marketingAddress_","type":"address"},{"internalType":"address","name":"devAddress_","type":"address"},{"internalType":"address","name":"threesevenAddress_","type":"address"}],"stateMutability":"nonpayable","type":"constructor"},{"inputs":[{"internalType":"uint256","name":"x","type":"uint256"},{"internalType":"uint256","name":"y","type":"uint256"}],"name":"PRBMath_MulDiv18_Overflow","type":"error"},{"inputs":[{"internalType":"uint256","name":"x","type":"uint256"},{"internalType":"uint256","name":"y","type":"uint256"},{"internalType":"uint256","name":"denominator","type":"uint256"}],"name":"PRBMath_MulDiv_Overflow","type":"error"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":true,"internalType":"address","name":"newOwner","type":"address"}],"name":"OwnershipTransferred","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"uint256","name":"reward","type":"uint256"},{"indexed":false,"internalType":"uint40","name":"timestamp","type":"uint40"},{"indexed":false,"internalType":"uint256","name":"index","type":"uint256"}],"name":"RewardPaid","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"timestamp","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"index","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"stakeTime","type":"uint256"}],"name":"Staked","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"from","type":"address"},{"indexed":true,"internalType":"address","name":"to","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"Transfer","type":"event"},{"inputs":[],"name":"GANA","outputs":[{"internalType":"contract IGANA","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"MIN_STAKE_USDT","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"back_Fee","outputs":[{"internalType":"uint8","name":"","type":"uint8"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"account","type":"address"}],"name":"balanceOf","outputs":[{"internalType":"uint256","name":"balance","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"balances","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"decimals","outputs":[{"internalType":"uint8","name":"","type":"uint8"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"devAddress","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"user","type":"address"}],"name":"isPreacher","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"market_Fee","outputs":[{"internalType":"uint8","name":"","type":"uint8"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"marketingAddress","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"maxStakeAmount","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"name","outputs":[{"internalType":"string","name":"","type":"string"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"network1In","outputs":[{"internalType":"uint256","name":"value","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"owner","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"user","type":"address"},{"internalType":"uint8","name":"index","type":"uint8"}],"name":"principalPlusRewardOfSlot","outputs":[{"internalType":"uint256","name":"reward","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"ratePerSec","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"_gana","type":"address"}],"name":"setGANA","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint160","name":"_amount","type":"uint160"},{"internalType":"uint256","name":"amountOutMin","type":"uint256"},{"internalType":"uint8","name":"_stakeIndex","type":"uint8"}],"name":"stake","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"user","type":"address"}],"name":"stakeCount","outputs":[{"internalType":"uint256","name":"count","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"symbol","outputs":[{"internalType":"string","name":"","type":"string"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"sync","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"t_supply","outputs":[{"internalType":"uint40","name":"stakeTime","type":"uint40"},{"internalType":"uint160","name":"tamount","type":"uint160"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"threesevenAddress","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"threeseven_Fee","outputs":[{"internalType":"uint8","name":"","type":"uint8"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"totalSupply","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"newOwner","type":"address"}],"name":"transferOwnership","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"index","type":"uint256"}],"name":"unstake","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"userIndex","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"","type":"address"},{"internalType":"uint256","name":"","type":"uint256"}],"name":"userStakeRecord","outputs":[{"internalType":"uint40","name":"stakeTime","type":"uint40"},{"internalType":"uint160","name":"amount","type":"uint160"},{"internalType":"bool","name":"status","type":"bool"},{"internalType":"uint8","name":"stakeIndex","type":"uint8"}],"stateMutability":"view","type":"function"}];
 
         // ================= 配置 =================
@@ -4101,13 +4130,16 @@
         // 每日统计起始时间偏移（小时）
         let dailyStartHour = 8; // 默认北京时间 08:00
         
+        // 图表当前显示范围 (天)
+        let trendRange = 7; // 默认7天
+        
         let stats = {
             totalStaked: 0, totalStaked1d: 0, totalStaked15d: 0, totalStaked30d: 0,
             count1d: 0, count15d: 0, count30d: 0,
             unlock2d: 0, unlock7d: 0, unlock15d: 0
         };
 
-        // ================= 新增: Chart 实例引用 =================
+        // ================= Chart 实例引用 =================
         let trendChart, pieChart, unlockChart;
 
         // ================= 初始化 =================
@@ -4270,7 +4302,7 @@
             });
             
             renderDailyStats(dailyStats, activeDaily);
-            updateAllCharts();  // 新增：数据更新后刷新图表
+            updateAllCharts();  // 数据更新后刷新图表
         }
 
         // ================= 数据持久化 =================
@@ -4475,20 +4507,32 @@
             document.getElementById(`tab-${tab}`).classList.add('active');
             document.getElementById(`panel-${tab}`).classList.add('active');
 
-            // 切换到图表选项卡时更新图表（确保数据最新）
+            // 切换到图表选项卡时更新图表
             if (tab === 'charts') {
                 updateAllCharts();
             }
         }
 
-        // ================= 新增: 更新所有图表 =================
+        // ================= 图表范围切换 =================
+        function setTrendRange(days) {
+            trendRange = days;
+            // 更新按钮激活状态
+            document.querySelectorAll('.range-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            // 重新绘制趋势图
+            updateTrendChart();
+        }
+
+        // ================= 更新所有图表 =================
         function updateAllCharts() {
+            updateTrendChart();
+            updatePieAndUnlockCharts();
+        }
+
+        function updateTrendChart() {
             if (!queryResults.length && !allStakeRecords.length) {
-                // 无数据时清空图表
                 if (trendChart) trendChart.destroy();
-                if (pieChart) pieChart.destroy();
-                if (unlockChart) unlockChart.destroy();
-                trendChart = pieChart = unlockChart = null;
+                trendChart = null;
                 return;
             }
 
@@ -4505,39 +4549,18 @@
                 }
             });
 
-            const sortedDates = Array.from(dailyMap.keys()).sort((a,b)=>a.localeCompare(b)).slice(-14); // 最近14天
-            const trendLabels = sortedDates;
-            const trendNewData = sortedDates.map(d => dailyMap.get(d) || 0);
-            const trendActiveData = sortedDates.map(d => activeMap.get(d) || 0);
+            // 获取所有日期并排序，取最近 trendRange 天
+            const allDates = Array.from(dailyMap.keys()).sort((a,b)=>a.localeCompare(b));
+            const recentDates = allDates.slice(-trendRange);
+            
+            const trendLabels = recentDates;
+            const trendNewData = recentDates.map(d => dailyMap.get(d) || 0);
+            const trendActiveData = recentDates.map(d => activeMap.get(d) || 0);
 
-            // 周期分布 (当前活跃)
-            let sum1d = 0, sum15d = 0, sum30d = 0;
-            queryResults.forEach(r => {
-                if (r.stakeIndex === 0) sum1d += r.amount;
-                else if (r.stakeIndex === 1) sum15d += r.amount;
-                else if (r.stakeIndex === 2) sum30d += r.amount;
-            });
-
-            // 解锁分布 (按天分组剩余时间 0-2天, 2-7天, 7-15天, >15天)
-            let unlock0_2 = 0, unlock2_7 = 0, unlock7_15 = 0, unlock15plus = 0;
-            const nowSec = Math.floor(Date.now() / 1000);
-            queryResults.forEach(r => {
-                const remain = r.unlockTime - nowSec;
-                if (remain <= 172800) unlock0_2 += r.amount;
-                else if (remain <= 604800) unlock2_7 += r.amount;
-                else if (remain <= 1296000) unlock7_15 += r.amount;
-                else unlock15plus += r.amount;
-            });
-
-            // 销毁旧图表并创建新图表
             const trendCtx = document.getElementById('trendChart')?.getContext('2d');
-            const pieCtx = document.getElementById('pieChart')?.getContext('2d');
-            const unlockCtx = document.getElementById('unlockChart')?.getContext('2d');
-            if (!trendCtx || !pieCtx || !unlockCtx) return;
+            if (!trendCtx) return;
 
             if (trendChart) trendChart.destroy();
-            if (pieChart) pieChart.destroy();
-            if (unlockChart) unlockChart.destroy();
 
             trendChart = new Chart(trendCtx, {
                 type: 'line',
@@ -4551,11 +4574,48 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    scales: { y: { beginAtZero: true, grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
-                             x: { ticks: { color: '#94a3b8', maxRotation: 45, minRotation: 20 } } },
+                    scales: { 
+                        y: { beginAtZero: true, grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
+                        x: { ticks: { color: '#94a3b8', maxRotation: 45, minRotation: 20 } } 
+                    },
                     plugins: { legend: { labels: { color: '#e2e8f0' } } }
                 }
             });
+        }
+
+        function updatePieAndUnlockCharts() {
+            if (!queryResults.length) {
+                if (pieChart) pieChart.destroy();
+                if (unlockChart) unlockChart.destroy();
+                pieChart = unlockChart = null;
+                return;
+            }
+
+            // 周期分布 (当前活跃)
+            let sum1d = 0, sum15d = 0, sum30d = 0;
+            queryResults.forEach(r => {
+                if (r.stakeIndex === 0) sum1d += r.amount;
+                else if (r.stakeIndex === 1) sum15d += r.amount;
+                else if (r.stakeIndex === 2) sum30d += r.amount;
+            });
+
+            // 解锁分布
+            let unlock0_2 = 0, unlock2_7 = 0, unlock7_15 = 0, unlock15plus = 0;
+            const nowSec = Math.floor(Date.now() / 1000);
+            queryResults.forEach(r => {
+                const remain = r.unlockTime - nowSec;
+                if (remain <= 172800) unlock0_2 += r.amount;
+                else if (remain <= 604800) unlock2_7 += r.amount;
+                else if (remain <= 1296000) unlock7_15 += r.amount;
+                else unlock15plus += r.amount;
+            });
+
+            const pieCtx = document.getElementById('pieChart')?.getContext('2d');
+            const unlockCtx = document.getElementById('unlockChart')?.getContext('2d');
+            if (!pieCtx || !unlockCtx) return;
+
+            if (pieChart) pieChart.destroy();
+            if (unlockChart) unlockChart.destroy();
 
             pieChart = new Chart(pieCtx, {
                 type: 'doughnut',
@@ -4589,8 +4649,10 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    scales: { y: { beginAtZero: true, grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
-                             x: { ticks: { color: '#94a3b8' } } },
+                    scales: { 
+                        y: { beginAtZero: true, grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
+                        x: { ticks: { color: '#94a3b8' } } 
+                    },
                     plugins: { legend: { labels: { color: '#e2e8f0' } } }
                 }
             });

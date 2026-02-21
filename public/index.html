@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
-    <title>GANA质押数据监控平台 + 图表(范围可选)</title>
+    <title>GANA质押数据监控平台 + 图表(默认0点/90天选项)</title>
     <!-- 引入 Bootstrap 用于快速布局 -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- 引入 Chart.js 轻量图表库 -->
@@ -581,7 +581,7 @@
         <!-- 头部 -->
         <div class="header">
             <h1>🔍 GANA 质押数据监控平台 <span id="queryMode" class="query-mode mode-cached">缓存数据</span></h1>
-            <div class="subtitle">批量查询 · 增量更新 · 数据持久化 · 图表范围可选</div>
+            <div class="subtitle">批量查询 · 增量更新 · 数据持久化 · 图表范围可选(7/15/30/90天)</div>
             <div class="contract-address" id="stakingContractAddress">0x72212F35aC448FE7763aA1BFdb360193Fa098E52</div>
         </div>
 
@@ -633,13 +633,13 @@
                 <div class="stat-sub">USDT</div>
             </div>
             <div class="stat-card">
-                <div class="stat-title">记录数</div>
+                <div class="stat-title">地址数</div>
                 <div class="stat-value" id="totalAddresses">0</div>
                 <div class="stat-sub">/5000</div>
             </div>
         </div>
 
-        <!-- 配置面板：每日统计起始时间 -->
+        <!-- 配置面板：每日统计起始时间 (默认改为0点) -->
         <div class="config-panel">
             <div class="config-row">
                 <span class="config-label">📅 每日统计起始时间：</span>
@@ -658,10 +658,10 @@
                     <option value="11">11:00 (UTC+11)</option>
                     <option value="12">12:00 (UTC+12)</option>
                 </select>
-                <span class="timezone-info" id="timezoneDisplay">当前: (UTC+0) 00:00</span>
+                <span class="timezone-info" id="timezoneDisplay">当前: UTC+0 00:00</span>
             </div>
             <div class="config-row" style="margin-top: 8px;">
-                <span class="config-label">💡 说明：每日从所选时间开始计算，例如选择08:00则从早上8点到次日早上8点为一天</span>
+                <span class="config-label">💡 说明：每日从所选时间开始计算，例如选择00:00则从凌晨0点到次日0点为一天</span>
             </div>
         </div>
 
@@ -777,7 +777,7 @@
             </div>
         </div>
 
-        <!-- 新增图表面板 (带范围选择) -->
+        <!-- 新增图表面板 (带范围选择: 7/15/30/90天) -->
         <div id="panel-charts" class="data-panel">
             <div class="chart-grid">
                 <!-- 每日新增质押趋势图 (带范围切换) -->
@@ -785,9 +785,10 @@
                     <div class="chart-title">
                         <span>📈 每日新增质押趋势</span>
                         <div class="chart-range-selector">
-                            <span class="range-btn active" onclick="setTrendRange(7)">7天</span>
+                            <span class="range-btn" onclick="setTrendRange(7)">7天</span>
                             <span class="range-btn" onclick="setTrendRange(15)">15天</span>
                             <span class="range-btn" onclick="setTrendRange(30)">30天</span>
+                            <span class="range-btn active" onclick="setTrendRange(90)">90天</span>
                         </div>
                     </div>
                     <div class="chart-container">
@@ -831,7 +832,7 @@
         const STAKE_DURATION_LABELS = {0: "1天", 1: "15天", 2: "30天"};
         const STAKE_DURATION_CLASS = {0: "badge-1d", 1: "badge-15d", 2: "badge-30d"};
 
-        // ================= 测试地址 =================
+        // ================= 测试地址 (简化版) =================
         const SAMPLE_ADDRESSES = [
             "0x27551c8b615a5e0d6faaf5cbfee72cbdd8ebfd4d",
             "0xfd600aeab3aecf1908021c84a936cb77cdb419c3",
@@ -4127,11 +4128,11 @@
         let allStakeRecords = [];
         let lastAddressList = '';
         
-        // 每日统计起始时间偏移（小时）
-        let dailyStartHour = 8; // 默认北京时间 08:00
+        // 每日统计起始时间偏移（小时） 默认改为0
+        let dailyStartHour = 0; // 默认 UTC+0 00:00
         
         // 图表当前显示范围 (天)
-        let trendRange = 7; // 默认7天
+        let trendRange = 90; // 默认90天
         
         let stats = {
             totalStaked: 0, totalStaked1d: 0, totalStaked15d: 0, totalStaked30d: 0,
@@ -4192,6 +4193,11 @@
 
             // 监听地址输入变化
             document.getElementById('addressList').addEventListener('input', updateAddressCount);
+            
+            // 默认激活90天按钮
+            document.querySelectorAll('.range-btn').forEach(btn => {
+                if (btn.innerText.includes('90')) btn.classList.add('active');
+            });
         });
 
         // ================= 每日统计起始时间配置 =================
@@ -4201,6 +4207,10 @@
                 if (saved) {
                     dailyStartHour = parseInt(saved);
                     document.getElementById('dailyStartTime').value = dailyStartHour;
+                } else {
+                    // 默认0点
+                    dailyStartHour = 0;
+                    document.getElementById('dailyStartTime').value = 0;
                 }
                 updateTimezoneDisplay();
             } catch (e) {
@@ -4513,7 +4523,7 @@
             }
         }
 
-        // ================= 图表范围切换 =================
+        // ================= 图表范围切换 (包含90天) =================
         function setTrendRange(days) {
             trendRange = days;
             // 更新按钮激活状态

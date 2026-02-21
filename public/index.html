@@ -4115,187 +4115,547 @@
             document.getElementById(`panel-${tab}`).classList.add('active');
         }
 
-        // ================= 全量查询 =================
-        async function fullQuery() {
-            if (!stakingContract) {
-                alert("❌ 合约未初始化");
-                return;
-            }
-            
-            if (isQuerying) return;
+        // ================= 全量查询（修复版） =================
+async function fullQuery() {
+    if (!stakingContract) {
+        alert("❌ 合约未初始化");
+        return;
+    }
+    
+    if (isQuerying) return;
 
-            // 清除缓存
-            addressCache.clear();
-            recordCache.clear();
-            queryResults = [];
-            allStakeRecords = [];
-            stats = {
-                totalStaked: 0, totalStaked1d: 0, totalStaked15d: 0, totalStaked30d: 0,
-                count1d: 0, count15d: 0, count30d: 0,
-                unlock2d: 0, unlock7d: 0, unlock15d: 0
+    const text = document.getElementById('addressList').value;
+    const addresses = text.split('\n')
+        .map(l => l.trim())
+        .filter(l => l.startsWith('0x') && l.length === 42);
+    
+    if (addresses.length === 0) {
+        alert("❌ 没有有效地址");
+        return;
+    }
+    
+    if (addresses.length > CONFIG.MAX_ADDRESSES) {
+        alert(`❌ 最多 ${CONFIG.MAX_ADDRESSES} 个地址`);
+        return;
+    }
+
+    isQuerying = true;
+    document.getElementById('queryMode').innerText = '全量查询';
+    document.getElementById('queryMode').className = 'query-mode mode-full';
+    document.getElementById('incrementalBtn').disabled = true;
+    document.getElementById('fullQueryBtn').disabled = true;
+    document.getElementById('progressContainer').style.display = 'block';
+
+    // 重置所有数据
+    queryResults = [];
+    allStakeRecords = [];
+    stats = {
+        totalStaked: 0, totalStaked1d: 0, totalStaked15d: 0, totalStaked30d: 0,
+        count1d: 0, count15d: 0, count30d: 0,
+        unlock2d: 0, unlock7d: 0, unlock15d: 0
+    };
+    
+    // 用于临时统计的 Map
+    const tempStats = {
+        totalStaked: 0,
+        byPool: {0: 0, 1: 0, 2: 0},
+        byPoolCount: {0: 0, 1: 0, 2: 0},
+        unlock: {2d: 0, 7d: 0, 15d: 0}
+    };
+    
+    // 用于每日统计的临时存储（分批处理避免内存溢出）
+    const dailyStats = new Map(); // 日期 -> {newStake, byPool: {0,1,2}}
+    const activeDaily = new Map(); // 日期 -> 活跃质押金额
+
+    const now = Math.floor(Date.now() / 1000);
+    const limits = {
+        '2d': now + 172800,
+        '7d': now + 604800,
+        '15d': now + 1296000
+    };
+
+    let processed = 0;
+    let totalActiveRecords = 0;
+    let totalAllRecords = 0;
+
+    // 分批处理 - 每批20个地址
+    for (let i = 0; i < addresses.length; i += 20) {
+        const batch = addresses.slice(i, i + 20);
+        
+        // 并发查询这一批地址
+        const promises = batch.map(async (address) => {
+            const result = {
+                active: [],  // 活跃记录
+                all: []      // 所有记录（包含已赎回）
             };
-
-            const text = document.getElementById('addressList').value;
-            const addresses = text.split('\n')
-                .map(l => l.trim())
-                .filter(l => l.startsWith('0x') && l.length === 42);
             
-            if (addresses.length === 0) {
-                alert("❌ 没有有效地址");
-                return;
-            }
-            
-            if (addresses.length > CONFIG.MAX_ADDRESSES) {
-                alert(`❌ 最多 ${CONFIG.MAX_ADDRESSES} 个地址`);
-                return;
-            }
-
-            isQuerying = true;
-            document.getElementById('queryMode').innerText = '全量查询';
-            document.getElementById('queryMode').className = 'query-mode mode-full';
-            document.getElementById('incrementalBtn').disabled = true;
-            document.getElementById('fullQueryBtn').disabled = true;
-            document.getElementById('progressContainer').style.display = 'block';
-
-            const now = Math.floor(Date.now() / 1000);
-            const limits = {
-                '2d': now + 172800,
-                '7d': now + 604800,
-                '15d': now + 1296000
-            };
-
-            let processed = 0;
-            let totalRecords = 0;
-
-            // 分批处理
-            for (let i = 0; i < addresses.length; i += CONFIG.BATCH_SIZE * CONFIG.PARALLEL_BATCHES) {
-                const batchPromises = [];
+            try {
+                const count = await stakingContract.stakeCount(address);
                 
-                for (let j = 0; j < CONFIG.PARALLEL_BATCHES && i + j * CONFIG.BATCH_SIZE < addresses.length; j++) {
-                    const start = i + j * CONFIG.BATCH_SIZE;
-                    const batch = addresses.slice(start, start + CONFIG.BATCH_SIZE);
-                    
-                    batchPromises.push(processBatchFull(batch, now, limits));
+                for (let j = 0; j < Number(count); j++) {
+                    try {
+                        const record = await stakingContract.userStakeRecord(address, j);
+                        
+                        const stakeTime = Number(record[0]);
+                        const amount = record[1];
+                        const isRedeemed = record[2];
+                        const stakeIndex = Number(record[3]);
+                        const amountNum = parseFloat(ethers.formatUnits(amount, 18));
+                        
+                        // 记录所有质押（用于每日统计）
+                        result.all.push({
+                            address,
+                            amount: amountNum,
+                            stakeTime,
+                            stakeIndex,
+                            isRedeemed
+                        });
+                        
+                        // 处理活跃质押
+                        if (!isRedeemed) {
+                            const unlockTime = stakeTime + STAKE_DURATIONS[stakeIndex];
+                            const timeRemaining = unlockTime - now;
+                            
+                            result.active.push({
+                                address,
+                                amount: amountNum,
+                                stakeTime,
+                                stakeIndex,
+                                unlockTime,
+                                timeRemaining,
+                                isRedeemed
+                            });
+                            
+                            // 实时更新统计
+                            tempStats.totalStaked += amountNum;
+                            tempStats.byPool[stakeIndex] += amountNum;
+                            tempStats.byPoolCount[stakeIndex]++;
+                            
+                            if (unlockTime <= limits['2d']) tempStats.unlock['2d'] += amountNum;
+                            if (unlockTime <= limits['7d']) tempStats.unlock['7d'] += amountNum;
+                            if (unlockTime <= limits['15d']) tempStats.unlock['15d'] += amountNum;
+                        }
+                        
+                        // 每日统计 - 按日期分组
+                        const date = new Date(stakeTime * 1000);
+                        const dateStr = date.toLocaleDateString('zh-CN', { 
+                            year: 'numeric', 
+                            month: '2-digit', 
+                            day: '2-digit' 
+                        }).replace(/\//g, '-');
+                        
+                        if (!dailyStats.has(dateStr)) {
+                            dailyStats.set(dateStr, {
+                                newStake: 0,
+                                byPool: {0: 0, 1: 0, 2: 0},
+                                count: {0: 0, 1: 0, 2: 0}
+                            });
+                        }
+                        
+                        const dayData = dailyStats.get(dateStr);
+                        dayData.newStake += amountNum;
+                        dayData.byPool[stakeIndex] += amountNum;
+                        dayData.count[stakeIndex]++;
+                        
+                        // 活跃质押按日期统计
+                        if (!isRedeemed) {
+                            if (!activeDaily.has(dateStr)) {
+                                activeDaily.set(dateStr, 0);
+                            }
+                            activeDaily.set(dateStr, activeDaily.get(dateStr) + amountNum);
+                        }
+                        
+                    } catch (e) {
+                        console.log(`读取记录失败: ${address}[${j}]`, e);
+                    }
                 }
-
-                const batchResults = await Promise.all(batchPromises);
-                batchResults.forEach(records => {
-                    queryResults.push(...records);
-                    totalRecords += records.length;
-                });
-
-                processed += CONFIG.BATCH_SIZE * CONFIG.PARALLEL_BATCHES;
-                const progress = Math.min(100, Math.round((processed / addresses.length) * 100));
-                document.getElementById('progressFill').style.width = progress + '%';
-                document.getElementById('progressText').innerHTML = 
-                    `全量查询: ${processed}/${addresses.length} (找到 ${totalRecords} 条)`;
-                
-                updateStats();
+            } catch (e) {
+                console.log(`查询地址失败: ${address}`, e);
             }
-
-            // 更新缓存 - 记录所有查询到的记录
-            queryResults.forEach(record => {
-                const key = `${record.address}_${record.stakeTime}`;
-                recordCache.set(key, record);
-            });
-
-            queryResults.sort((a, b) => b.stakeTime - a.stakeTime);
-            renderResults();
-            updateStats();
-            updateDailyStats();
-
-            document.getElementById('progressText').innerHTML = `✅ 完成: ${queryResults.length}条记录`;
-            setTimeout(() => {
-                document.getElementById('incrementalBtn').disabled = false;
-                document.getElementById('fullQueryBtn').disabled = false;
-                document.getElementById('progressContainer').style.display = 'none';
-            }, 2000);
             
-            isQuerying = false;
+            return result;
+        });
+
+        const batchResults = await Promise.all(promises);
+        
+        // 合并结果
+        batchResults.forEach(result => {
+            queryResults.push(...result.active);
+            allStakeRecords.push(...result.all);
+            totalActiveRecords += result.active.length;
+            totalAllRecords += result.all.length;
+        });
+
+        processed += batch.length;
+        const progress = Math.round((processed / addresses.length) * 100);
+        document.getElementById('progressFill').style.width = progress + '%';
+        document.getElementById('progressText').innerHTML = 
+            `查询中 ${processed}/${addresses.length} (找到 ${totalActiveRecords} 条活跃记录)`;
+        
+        // 实时更新统计显示
+        stats.totalStaked = tempStats.totalStaked;
+        stats.totalStaked1d = tempStats.byPool[0];
+        stats.totalStaked15d = tempStats.byPool[1];
+        stats.totalStaked30d = tempStats.byPool[2];
+        stats.count1d = tempStats.byPoolCount[0];
+        stats.count15d = tempStats.byPoolCount[1];
+        stats.count30d = tempStats.byPoolCount[2];
+        stats.unlock2d = tempStats.unlock['2d'];
+        stats.unlock7d = tempStats.unlock['7d'];
+        stats.unlock15d = tempStats.unlock['15d'];
+        
+        updateStats();
+        
+        // 延迟一下避免请求过密
+        await new Promise(r => setTimeout(r, 50));
+    }
+
+    // 按时间倒序排序
+    queryResults.sort((a, b) => b.stakeTime - a.stakeTime);
+    
+    // 渲染表格
+    renderResults();
+    renderDailyStats(dailyStats, activeDaily);
+    updateStats();
+
+    document.getElementById('progressText').innerHTML = `✅ 完成: ${totalActiveRecords}条活跃记录, 历史总记录: ${totalAllRecords}条`;
+    setTimeout(() => {
+        document.getElementById('incrementalBtn').disabled = false;
+        document.getElementById('fullQueryBtn').disabled = false;
+        document.getElementById('progressContainer').style.display = 'none';
+    }, 2000);
+    
+    isQuerying = false;
+}
+
+// ================= 渲染每日统计 =================
+function renderDailyStats(dailyStats, activeDaily) {
+    if (dailyStats.size === 0) {
+        document.getElementById('dailyStatsBody').innerHTML = '<tr><td colspan="6" class="empty-state">📊 暂无数据</td></tr>';
+        return;
+    }
+
+    // 转换为数组并排序
+    const sortedDates = Array.from(dailyStats.entries())
+        .map(([date, data]) => ({
+            date,
+            newStake: data.newStake,
+            activeStake: activeDaily.get(date) || 0,
+            new1d: data.byPool[0],
+            new15d: data.byPool[1],
+            new30d: data.byPool[2],
+            count1d: data.count[0],
+            count15d: data.count[1],
+            count30d: data.count[2]
+        }))
+        .sort((a, b) => b.date.localeCompare(a.date));
+
+    const tbody = document.getElementById('dailyStatsBody');
+    tbody.innerHTML = sortedDates.map(day => `
+        <tr>
+            <td>${day.date}</td>
+            <td class="amount-cell">${day.newStake.toFixed(2)}</td>
+            <td class="amount-cell">${day.activeStake.toFixed(2)}</td>
+            <td>${day.new1d.toFixed(2)} <span class="stats-badge">${day.count1d}</span></td>
+            <td>${day.new15d.toFixed(2)} <span class="stats-badge">${day.count15d}</span></td>
+            <td>${day.new30d.toFixed(2)} <span class="stats-badge">${day.count30d}</span></td>
+        </tr>
+    `).join('');
         }
 
-        // ================= 增量查询 =================
-        async function incrementalQuery() {
-            if (!stakingContract) {
-                alert("❌ 合约未初始化");
-                return;
-            }
+        // ================= 增量查询（修复版） =================
+async function incrementalQuery() {
+    if (!stakingContract) {
+        alert("❌ 合约未初始化");
+        return;
+    }
+    
+    if (isQuerying) return;
+
+    const text = document.getElementById('addressList').value;
+    const addresses = text.split('\n')
+        .map(l => l.trim())
+        .filter(l => l.startsWith('0x') && l.length === 42);
+    
+    if (addresses.length === 0) {
+        alert("❌ 没有有效地址");
+        return;
+    }
+    
+    if (addresses.length > CONFIG.MAX_ADDRESSES) {
+        alert(`❌ 最多 ${CONFIG.MAX_ADDRESSES} 个地址`);
+        return;
+    }
+
+    isQuerying = true;
+    document.getElementById('queryMode').innerText = '增量更新';
+    document.getElementById('queryMode').className = 'query-mode mode-incremental';
+    document.getElementById('incrementalBtn').disabled = true;
+    document.getElementById('fullQueryBtn').disabled = true;
+    document.getElementById('progressContainer').style.display = 'block';
+
+    const now = Math.floor(Date.now() / 1000);
+    const limits = {
+        '2d': now + 172800,
+        '7d': now + 604800,
+        '15d': now + 1296000
+    };
+
+    let processed = 0;
+    let newRecords = 0;
+    let redeemedRecords = 0;
+
+    // 用于增量统计
+    const tempStats = {
+        totalStaked: stats.totalStaked,
+        byPool: {
+            0: stats.totalStaked1d,
+            1: stats.totalStaked15d,
+            2: stats.totalStaked30d
+        },
+        byPoolCount: {
+            0: stats.count1d,
+            1: stats.count15d,
+            2: stats.count30d
+        },
+        unlock: {
+            '2d': stats.unlock2d,
+            '7d': stats.unlock7d,
+            '15d': stats.unlock15d
+        }
+    };
+
+    // 分批处理
+    for (let i = 0; i < addresses.length; i += 20) {
+        const batch = addresses.slice(i, i + 20);
+        
+        const promises = batch.map(async (address) => {
+            let newForAddress = 0;
+            let redeemedForAddress = 0;
             
-            if (isQuerying) return;
-
-            const text = document.getElementById('addressList').value;
-            const addresses = text.split('\n')
-                .map(l => l.trim())
-                .filter(l => l.startsWith('0x') && l.length === 42);
-            
-            if (addresses.length === 0) {
-                alert("❌ 没有有效地址");
-                return;
-            }
-            
-            if (addresses.length > CONFIG.MAX_ADDRESSES) {
-                alert(`❌ 最多 ${CONFIG.MAX_ADDRESSES} 个地址`);
-                return;
-            }
-
-            isQuerying = true;
-            document.getElementById('queryMode').innerText = '增量更新';
-            document.getElementById('queryMode').className = 'query-mode mode-incremental';
-            document.getElementById('incrementalBtn').disabled = true;
-            document.getElementById('fullQueryBtn').disabled = true;
-            document.getElementById('progressContainer').style.display = 'block';
-
-            const now = Math.floor(Date.now() / 1000);
-            const limits = {
-                '2d': now + 172800,
-                '7d': now + 604800,
-                '15d': now + 1296000
-            };
-
-            let processed = 0;
-            let newRecords = 0;
-            let redeemedRecords = 0;
-
-            // 分批处理地址
-            for (let i = 0; i < addresses.length; i += CONFIG.BATCH_SIZE * CONFIG.PARALLEL_BATCHES) {
-                const batchPromises = [];
+            try {
+                const currentCount = await stakingContract.stakeCount(address);
+                const cached = addressCache.get(address);
                 
-                for (let j = 0; j < CONFIG.PARALLEL_BATCHES && i + j * CONFIG.BATCH_SIZE < addresses.length; j++) {
-                    const start = i + j * CONFIG.BATCH_SIZE;
-                    const batch = addresses.slice(start, start + CONFIG.BATCH_SIZE);
+                // 如果没有缓存，全量查询
+                if (!cached) {
+                    for (let j = 0; j < Number(currentCount); j++) {
+                        try {
+                            const record = await stakingContract.userStakeRecord(address, j);
+                            
+                            const stakeTime = Number(record[0]);
+                            const amount = record[1];
+                            const isRedeemed = record[2];
+                            const stakeIndex = Number(record[3]);
+                            const amountNum = parseFloat(ethers.formatUnits(amount, 18));
+                            const key = `${address}_${stakeTime}`;
+                            
+                            // 记录所有质押
+                            allStakeRecords.push({
+                                address,
+                                amount: amountNum,
+                                stakeTime,
+                                stakeIndex,
+                                isRedeemed
+                            });
+                            
+                            if (!isRedeemed) {
+                                const unlockTime = stakeTime + STAKE_DURATIONS[stakeIndex];
+                                const timeRemaining = unlockTime - now;
+                                
+                                const recordData = {
+                                    address,
+                                    amount: amountNum,
+                                    stakeTime,
+                                    stakeIndex,
+                                    unlockTime,
+                                    timeRemaining,
+                                    isRedeemed,
+                                    isNew: true
+                                };
+                                
+                                queryResults.push(recordData);
+                                recordCache.set(key, recordData);
+                                newForAddress++;
+                                
+                                // 更新统计
+                                tempStats.totalStaked += amountNum;
+                                tempStats.byPool[stakeIndex] += amountNum;
+                                tempStats.byPoolCount[stakeIndex]++;
+                                
+                                if (unlockTime <= limits['2d']) tempStats.unlock['2d'] += amountNum;
+                                if (unlockTime <= limits['7d']) tempStats.unlock['7d'] += amountNum;
+                                if (unlockTime <= limits['15d']) tempStats.unlock['15d'] += amountNum;
+                            }
+                        } catch (e) {}
+                    }
+                } else {
+                    // 有缓存，只查询新增的
+                    for (let j = cached.count; j < Number(currentCount); j++) {
+                        try {
+                            const record = await stakingContract.userStakeRecord(address, j);
+                            
+                            const stakeTime = Number(record[0]);
+                            const amount = record[1];
+                            const isRedeemed = record[2];
+                            const stakeIndex = Number(record[3]);
+                            const amountNum = parseFloat(ethers.formatUnits(amount, 18));
+                            const key = `${address}_${stakeTime}`;
+                            
+                            allStakeRecords.push({
+                                address,
+                                amount: amountNum,
+                                stakeTime,
+                                stakeIndex,
+                                isRedeemed
+                            });
+                            
+                            if (!isRedeemed) {
+                                const unlockTime = stakeTime + STAKE_DURATIONS[stakeIndex];
+                                const timeRemaining = unlockTime - now;
+                                
+                                const recordData = {
+                                    address,
+                                    amount: amountNum,
+                                    stakeTime,
+                                    stakeIndex,
+                                    unlockTime,
+                                    timeRemaining,
+                                    isRedeemed,
+                                    isNew: true
+                                };
+                                
+                                queryResults.push(recordData);
+                                recordCache.set(key, recordData);
+                                newForAddress++;
+                                
+                                tempStats.totalStaked += amountNum;
+                                tempStats.byPool[stakeIndex] += amountNum;
+                                tempStats.byPoolCount[stakeIndex]++;
+                                
+                                if (unlockTime <= limits['2d']) tempStats.unlock['2d'] += amountNum;
+                                if (unlockTime <= limits['7d']) tempStats.unlock['7d'] += amountNum;
+                                if (unlockTime <= limits['15d']) tempStats.unlock['15d'] += amountNum;
+                            }
+                        } catch (e) {}
+                    }
                     
-                    batchPromises.push(processBatchIncremental(batch, now, limits));
+                    // 检查是否有赎回的记录
+                    for (let j = 0; j < cached.count; j++) {
+                        try {
+                            const record = await stakingContract.userStakeRecord(address, j);
+                            
+                            const stakeTime = Number(record[0]);
+                            const isRedeemed = record[2];
+                            const key = `${address}_${stakeTime}`;
+                            
+                            if (isRedeemed && recordCache.has(key)) {
+                                const oldRecord = recordCache.get(key);
+                                recordCache.delete(key);
+                                redeemedForAddress++;
+                                
+                                // 从统计中减去
+                                tempStats.totalStaked -= oldRecord.amount;
+                                tempStats.byPool[oldRecord.stakeIndex] -= oldRecord.amount;
+                                tempStats.byPoolCount[oldRecord.stakeIndex]--;
+                            }
+                        } catch (e) {}
+                    }
                 }
-
-                const batchResults = await Promise.all(batchPromises);
-                batchResults.forEach(result => {
-                    newRecords += result.newCount;
-                    redeemedRecords += result.redeemedCount;
-                });
-
-                processed += CONFIG.BATCH_SIZE * CONFIG.PARALLEL_BATCHES;
-                const progress = Math.min(100, Math.round((processed / addresses.length) * 100));
-                document.getElementById('progressFill').style.width = progress + '%';
-                document.getElementById('progressText').innerHTML = 
-                    `增量更新: +${newRecords}新, -${redeemedRecords}赎回 (${processed}/${addresses.length})`;
                 
-                updateStats();
+                // 更新缓存
+                addressCache.set(address, { count: Number(currentCount), lastUpdate: Date.now() });
+                
+            } catch (e) {
+                console.log(`查询地址失败: ${address}`, e);
             }
-
-            // 重新排序并渲染
-            queryResults.sort((a, b) => b.stakeTime - a.stakeTime);
-            renderResults(true);
-            updateStats();
-            updateDailyStats();
-
-            document.getElementById('progressText').innerHTML = `✅ 完成: +${newRecords}新, -${redeemedRecords}赎回`;
-            setTimeout(() => {
-                document.getElementById('incrementalBtn').disabled = false;
-                document.getElementById('fullQueryBtn').disabled = false;
-                document.getElementById('progressContainer').style.display = 'none';
-            }, 2000);
             
-            isQuerying = false;
+            return { new: newForAddress, redeemed: redeemedForAddress };
+        });
+
+        const results = await Promise.all(promises);
+        results.forEach(r => {
+            newRecords += r.new;
+            redeemedRecords += r.redeemed;
+        });
+
+        processed += batch.length;
+        const progress = Math.min(100, Math.round((processed / addresses.length) * 100));
+        document.getElementById('progressFill').style.width = progress + '%';
+        document.getElementById('progressText').innerHTML = 
+            `增量更新: +${newRecords}新, -${redeemedRecords}赎回 (${processed}/${addresses.length})`;
+        
+        // 更新统计显示
+        stats.totalStaked = tempStats.totalStaked;
+        stats.totalStaked1d = tempStats.byPool[0];
+        stats.totalStaked15d = tempStats.byPool[1];
+        stats.totalStaked30d = tempStats.byPool[2];
+        stats.count1d = tempStats.byPoolCount[0];
+        stats.count15d = tempStats.byPoolCount[1];
+        stats.count30d = tempStats.byPoolCount[2];
+        stats.unlock2d = tempStats.unlock['2d'];
+        stats.unlock7d = tempStats.unlock['7d'];
+        stats.unlock15d = tempStats.unlock['15d'];
+        
+        updateStats();
+        
+        await new Promise(r => setTimeout(r, 50));
+    }
+
+    // 重新计算每日统计
+    await recalcDailyStats();
+
+    // 重新排序并渲染
+    queryResults.sort((a, b) => b.stakeTime - a.stakeTime);
+    renderResults(true);
+    updateStats();
+
+    document.getElementById('progressText').innerHTML = `✅ 完成: +${newRecords}新, -${redeemedRecords}赎回`;
+    setTimeout(() => {
+        document.getElementById('incrementalBtn').disabled = false;
+        document.getElementById('fullQueryBtn').disabled = false;
+        document.getElementById('progressContainer').style.display = 'none';
+    }, 2000);
+    
+    isQuerying = false;
+}
+
+// ================= 重新计算每日统计 =================
+async function recalcDailyStats() {
+    const dailyStats = new Map();
+    const activeDaily = new Map();
+    
+    // 使用 allStakeRecords 重新计算
+    allStakeRecords.forEach(record => {
+        const date = new Date(record.stakeTime * 1000);
+        const dateStr = date.toLocaleDateString('zh-CN', { 
+            year: 'numeric', 
+            month: '2-digit', 
+            day: '2-digit' 
+        }).replace(/\//g, '-');
+        
+        if (!dailyStats.has(dateStr)) {
+            dailyStats.set(dateStr, {
+                newStake: 0,
+                byPool: {0: 0, 1: 0, 2: 0},
+                count: {0: 0, 1: 0, 2: 0}
+            });
+        }
+        
+        const dayData = dailyStats.get(dateStr);
+        dayData.newStake += record.amount;
+        dayData.byPool[record.stakeIndex] += record.amount;
+        dayData.count[record.stakeIndex]++;
+        
+        if (!record.isRedeemed) {
+            if (!activeDaily.has(dateStr)) {
+                activeDaily.set(dateStr, 0);
+            }
+            activeDaily.set(dateStr, activeDaily.get(dateStr) + record.amount);
+        }
+    });
+    
+    renderDailyStats(dailyStats, activeDaily);
         }
 
         // ================= 批量处理（全量） =================

@@ -422,8 +422,11 @@
             color: white;
         }
         .mode-cached {
-            background-color: #10b981;
-            color: white;
+            background-color: #10b981;  /* 鲜绿色背景 */
+            color: #ffffff;                           /* 白色文字 */
+            font-weight: 600;                    /* 加粗文字 */
+            border: 1px solid #34d399;   /* 添加亮色边框 */
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);  /* 添加阴影 */
         }
         
         .data-tabs {
@@ -581,33 +584,33 @@
         <!-- 头部 -->
         <div class="header">
             <h1>🔍 GANA 质押数据监控平台 <span id="queryMode" class="query-mode mode-cached">缓存数据</span></h1>
-            <div class="subtitle">批量查询 · 增量更新 · 数据持久化 · 图表范围可选(7/15/30/90天)</div>
+            <div class="subtitle">批量查询 · 增量更新 · 数据持久化 · 支持50,000地址 · 图表范围可选(7/15/30/90天)</div>
             <div class="contract-address" id="stakingContractAddress">0x72212F35aC448FE7763aA1BFdb360193Fa098E52</div>
         </div>
 
         <!-- 统计卡片 - 第一行 -->
         <div class="stats-grid">
             <div class="stat-card">
-                <div class="stat-title">总质押中金额</div>
+                <div class="stat-title">💰 总质押中金额</div>
                 <div class="stat-value" id="totalStaked">0.00</div>
                 <div class="stat-sub">USDT</div>
             </div>
             <div class="stat-card">
-                <div class="stat-title">1天质押金额</div>
+                <div class="stat-title">💰 1天质押金额</div>
                 <div class="stat-value" id="totalStaked1d">0.00</div>
                 <div class="stat-sub">
                     <span id="count1d">0</span>记录
                 </div>
             </div>
             <div class="stat-card">
-                <div class="stat-title">15天质押金额</div>
+                <div class="stat-title">💰 15天质押金额</div>
                 <div class="stat-value" id="totalStaked15d">0.00</div>
                 <div class="stat-sub">
                     <span id="count15d">0</span>记录
                 </div>
             </div>
             <div class="stat-card">
-                <div class="stat-title">30天质押金额</div>
+                <div class="stat-title">💰 30天质押金额</div>
                 <div class="stat-value" id="totalStaked30d">0.00</div>
                 <div class="stat-sub">
                     <span id="count30d">0</span>记录
@@ -618,24 +621,24 @@
         <!-- 统计卡片 - 第二行 -->
         <div class="stats-grid">
             <div class="stat-card">
-                <div class="stat-title">未来2天可赎回</div>
+                <div class="stat-title">💰 未来2天可赎回</div>
                 <div class="stat-value" id="unlock2d">0.00</div>
                 <div class="stat-sub">USDT</div>
             </div>
             <div class="stat-card">
-                <div class="stat-title">未来7天可赎回</div>
+                <div class="stat-title">💰 未来7天可赎回</div>
                 <div class="stat-value" id="unlock7d">0.00</div>
                 <div class="stat-sub">USDT</div>
             </div>
             <div class="stat-card">
-                <div class="stat-title">未来15天可赎回</div>
+                <div class="stat-title">💰 未来15天可赎回</div>
                 <div class="stat-value" id="unlock15d">0.00</div>
                 <div class="stat-sub">USDT</div>
             </div>
             <div class="stat-card">
-                <div class="stat-title">地址数</div>
-                <div class="stat-value" id="totalAddresses">0</div>
-                <div class="stat-sub">/5000</div>
+                <div class="stat-title">💰 LP池可提现USDT</div>
+                <div class="stat-value" id="lpWithdrawable">0.00</div>
+                <div class="stat-sub">USDT</div>
             </div>
         </div>
 
@@ -667,7 +670,7 @@
 
         <!-- 地址输入区域 (简化测试地址) -->
         <div class="address-input-area">
-            <textarea id="addressList" class="address-textarea" placeholder="每行一个地址，最多5000个&#10;例如：&#10;0x72212F35aC448FE7763aA1BFdb360193Fa098E52">0x72212F35aC448FE7763aA1BFdb360193Fa098E52</textarea>
+            <textarea id="addressList" class="address-textarea" placeholder="每行一个地址，最多50,000个&#10;例如：&#10;0x72212F35aC448FE7763aA1BFdb360193Fa098E52">0x72212F35aC448FE7763aA1BFdb360193Fa098E52</textarea>
             
             <div class="address-count" id="addressCount">1 个地址</div>
             
@@ -687,6 +690,9 @@
                 </button>
                 <button class="btn-incremental" onclick="incrementalQuery()" id="incrementalBtn">
                     ⚡ 增量更新
+                </button>
+                <button class="btn-incremental" onclick="refreshLPPool()" id="refreshLPBtn">
+                    💰 刷新LP池余额
                 </button>
                 <button class="btn-clear" onclick="resetQuery()">🔄 重置</button>
             </div>
@@ -803,7 +809,7 @@
                     </div>
                 </div>
             </div>
-            <!-- 额外: 解锁时间分布柱状图 -->
+            <!-- 额外: 解锁时间分布柱状图 (修改为5个区间) -->
             <div class="chart-card" style="margin-top:16px;">
                 <div class="chart-title">⏳ 解锁时间分布 (未来可赎回)</div>
                 <div class="chart-container" style="height:200px;">
@@ -820,13 +826,21 @@
         // ================= 配置 =================
         const CONFIG = {
             STAKING: "0x72212F35aC448FE7763aA1BFdb360193Fa098E52",
-            MAX_ADDRESSES: 5000,
-            BATCH_SIZE: 10,
-            PARALLEL_BATCHES: 2,
+            LP_POOL: "0xa2f464a2462aed49b9b31eb8861bc6b0bbb0483f",  // LP池地址
+            USDT: "0x55d398326f99059fF775485246999027B3197955",   // BSC上的USDT合约地址
+            MAX_ADDRESSES: 50000,  // 增加到5万
+            BATCH_SIZE: 10,         // 每批查询10个地址
+            PARALLEL_BATCHES: 2,    // 并行批次
             RETRY_LIMIT: 3,
             RETRY_DELAY: 1000,
             STORAGE_KEY: 'stakeData'  // localStorage 存储键
         };
+
+        // USDT的ABI（只需要balanceOf函数）
+        const USDT_ABI = [
+            "function balanceOf(address account) view returns (uint256)",
+            "function decimals() view returns (uint8)"
+        ];
         
         const STAKE_DURATIONS = {0: 86400, 1: 1296000, 2: 2592000};
         const STAKE_DURATION_LABELS = {0: "1天", 1: "15天", 2: "30天"};
@@ -4227,7 +4241,8 @@
         let stats = {
             totalStaked: 0, totalStaked1d: 0, totalStaked15d: 0, totalStaked30d: 0,
             count1d: 0, count15d: 0, count30d: 0,
-            unlock2d: 0, unlock7d: 0, unlock15d: 0
+            unlock2d: 0, unlock7d: 0, unlock15d: 0,
+            lpWithdrawable: 0  // 新增：LP池可提现金额
         };
 
         // ================= Chart 实例引用 =================
@@ -4284,7 +4299,7 @@
             // 监听地址输入变化
             document.getElementById('addressList').addEventListener('input', updateAddressCount);
             
-            // 默认激活30天按钮
+            // 默认激活90天按钮
             document.querySelectorAll('.range-btn').forEach(btn => {
                 if (btn.innerText.includes('30')) btn.classList.add('active');
             });
@@ -4371,14 +4386,13 @@
         }
 
         // ================= 重新计算所有每日统计 =================
-        // 修改 recalcAllDailyStats 函数
-function recalcAllDailyStats() {
-    // 只有当需要重新计算时才调用
-    regenerateDailyStatsTable();
-    
-    // 更新图表（如果需要）
-    updateAllCharts();
-}
+        function recalcAllDailyStats() {
+            // 只有当需要重新计算时才调用
+            regenerateDailyStatsTable();
+            
+            // 更新图表（如果需要）
+            updateAllCharts();
+        }
 
         // ================= 数据持久化 =================
         function saveToStorage() {
@@ -4402,104 +4416,104 @@ function recalcAllDailyStats() {
         }
 
         function loadFromStorage() {
-    try {
-        const saved = localStorage.getItem(CONFIG.STORAGE_KEY);
-        if (!saved) return false;
-        
-        const data = JSON.parse(saved);
-        
-        // 恢复地址列表
-        if (data.addressList) {
-            document.getElementById('addressList').value = data.addressList;
-            updateAddressCount();
+            try {
+                const saved = localStorage.getItem(CONFIG.STORAGE_KEY);
+                if (!saved) return false;
+                
+                const data = JSON.parse(saved);
+                
+                // 恢复地址列表
+                if (data.addressList) {
+                    document.getElementById('addressList').value = data.addressList;
+                    updateAddressCount();
+                }
+                lastAddressList = data.lastAddressList || '';
+                
+                // 恢复统计数据 - 直接使用保存的数据，不重新计算
+                if (data.stats) {
+                    stats = data.stats;
+                }
+                
+                // 恢复查询结果
+                if (data.queryResults) {
+                    queryResults = data.queryResults;
+                }
+                
+                if (data.allStakeRecords) {
+                    allStakeRecords = data.allStakeRecords;
+                }
+                
+                // 恢复缓存
+                if (data.addressCache) {
+                    addressCache = new Map(data.addressCache);
+                }
+                
+                if (data.recordCache) {
+                    recordCache = new Map(data.recordCache);
+                }
+                
+                // 恢复起始时间设置
+                if (data.dailyStartHour !== undefined) {
+                    dailyStartHour = data.dailyStartHour;
+                    document.getElementById('dailyStartTime').value = dailyStartHour;
+                    updateTimezoneDisplay();
+                }
+                
+                console.log(`已加载上次数据，时间: ${new Date(data.timestamp).toLocaleString()}`);
+                
+                // 渲染数据，但不重新计算每日统计
+                renderResults();
+                updateStats();
+                
+                // 重新生成每日统计表格（基于allStakeRecords，但不影响stats）
+                regenerateDailyStatsTable();
+                
+                // 更新图表
+                updateAllCharts();
+                
+                return true;
+            } catch (e) {
+                console.error('加载数据失败:', e);
+                return false;
+            }
         }
-        lastAddressList = data.lastAddressList || '';
-        
-        // 恢复统计数据 - 直接使用保存的数据，不重新计算
-        if (data.stats) {
-            stats = data.stats;
-        }
-        
-        // 恢复查询结果
-        if (data.queryResults) {
-            queryResults = data.queryResults;
-        }
-        
-        if (data.allStakeRecords) {
-            allStakeRecords = data.allStakeRecords;
-        }
-        
-        // 恢复缓存
-        if (data.addressCache) {
-            addressCache = new Map(data.addressCache);
-        }
-        
-        if (data.recordCache) {
-            recordCache = new Map(data.recordCache);
-        }
-        
-        // 恢复起始时间设置
-        if (data.dailyStartHour !== undefined) {
-            dailyStartHour = data.dailyStartHour;
-            document.getElementById('dailyStartTime').value = dailyStartHour;
-            updateTimezoneDisplay();
-        }
-        
-        console.log(`已加载上次数据，时间: ${new Date(data.timestamp).toLocaleString()}`);
-        
-        // 渲染数据，但不重新计算每日统计
-        renderResults();
-        updateStats();
-        
-        // 重新生成每日统计表格（基于allStakeRecords，但不影响stats）
-        regenerateDailyStatsTable();
-        
-        // 更新图表
-        updateAllCharts();
-        
-        return true;
-    } catch (e) {
-        console.error('加载数据失败:', e);
-        return false;
-    }
-}
 
         // 新增函数：仅用于生成每日统计表格，不影响全局stats
-function regenerateDailyStatsTable() {
-    if (!allStakeRecords || allStakeRecords.length === 0) {
-        document.getElementById('dailyStatsBody').innerHTML = '<tr><td colspan="6" class="empty-state">📊 暂无数据</td></tr>';
-        return;
-    }
-    
-    const dailyStats = new Map();
-    const activeDaily = new Map();
-    
-    allStakeRecords.forEach(record => {
-        const dateStr = getDateStrFromTimestamp(record.stakeTime);
-        
-        if (!dailyStats.has(dateStr)) {
-            dailyStats.set(dateStr, {
-                newStake: 0,
-                byPool: {0: 0, 1: 0, 2: 0},
-                count: {0: 0, 1: 0, 2: 0}
-            });
-        }
-        
-        const dayData = dailyStats.get(dateStr);
-        dayData.newStake += record.amount;
-        dayData.byPool[record.stakeIndex] += record.amount;
-        dayData.count[record.stakeIndex]++;
-        
-        if (!record.isRedeemed) {
-            if (!activeDaily.has(dateStr)) {
-                activeDaily.set(dateStr, 0);
+        function regenerateDailyStatsTable() {
+            if (!allStakeRecords || allStakeRecords.length === 0) {
+                document.getElementById('dailyStatsBody').innerHTML = '<tr><td colspan="6" class="empty-state">📊 暂无数据</td></tr>';
+                return;
             }
-            activeDaily.set(dateStr, activeDaily.get(dateStr) + record.amount);
+            
+            const dailyStats = new Map();
+            const activeDaily = new Map();
+            
+            allStakeRecords.forEach(record => {
+                const dateStr = getDateStrFromTimestamp(record.stakeTime);
+                
+                if (!dailyStats.has(dateStr)) {
+                    dailyStats.set(dateStr, {
+                        newStake: 0,
+                        byPool: {0: 0, 1: 0, 2: 0},
+                        count: {0: 0, 1: 0, 2: 0}
+                    });
+                }
+                
+                const dayData = dailyStats.get(dateStr);
+                dayData.newStake += record.amount;
+                dayData.byPool[record.stakeIndex] += record.amount;
+                dayData.count[record.stakeIndex]++;
+                
+                if (!record.isRedeemed) {
+                    if (!activeDaily.has(dateStr)) {
+                        activeDaily.set(dateStr, 0);
+                    }
+                    activeDaily.set(dateStr, activeDaily.get(dateStr) + record.amount);
+                }
+            });
+            
+            renderDailyStats(dailyStats, activeDaily);
         }
-    });
-    
-    renderDailyStats(dailyStats, activeDaily);
-}
         
         function loadLastQuery() {
             if (loadFromStorage()) {
@@ -4552,7 +4566,8 @@ function regenerateDailyStatsTable() {
                 stats = {
                     totalStaked: 0, totalStaked1d: 0, totalStaked15d: 0, totalStaked30d: 0,
                     count1d: 0, count15d: 0, count30d: 0,
-                    unlock2d: 0, unlock7d: 0, unlock15d: 0
+                    unlock2d: 0, unlock7d: 0, unlock15d: 0,
+                    lpWithdrawable: 0  // 新增：LP池余额
                 };
                 updateStats();
                 renderResults();
@@ -4612,10 +4627,10 @@ function regenerateDailyStatsTable() {
             document.getElementById('unlock2d').innerText = stats.unlock2d.toFixed(2);
             document.getElementById('unlock7d').innerText = stats.unlock7d.toFixed(2);
             document.getElementById('unlock15d').innerText = stats.unlock15d.toFixed(2);
+            document.getElementById('lpWithdrawable').innerText = stats.lpWithdrawable.toFixed(2);
             document.getElementById('count1d').innerText = stats.count1d;
             document.getElementById('count15d').innerText = stats.count15d;
             document.getElementById('count30d').innerText = stats.count30d;
-            document.getElementById('totalAddresses').innerText = queryResults.length;
             document.getElementById('resultCount').innerText = queryResults.length;
         }
 
@@ -4631,14 +4646,14 @@ function regenerateDailyStatsTable() {
             document.getElementById(`panel-${tab}`).classList.add('active');
 
             // 切换到图表选项卡时更新图表（但使用当前数据，不重新计算）
-    if (tab === 'charts') {
-        // 使用当前数据更新图表，不重新计算
-        if (trendChart) trendChart.destroy();
-        if (pieChart) pieChart.destroy();
-        if (unlockChart) unlockChart.destroy();
-        updateAllCharts();
-    }
-}
+            if (tab === 'charts') {
+                // 使用当前数据更新图表，不重新计算
+                if (trendChart) trendChart.destroy();
+                if (pieChart) pieChart.destroy();
+                if (unlockChart) unlockChart.destroy();
+                updateAllCharts();
+            }
+        }
 
         // ================= 图表范围切换 (包含90天) =================
         function setTrendRange(days) {
@@ -4726,15 +4741,16 @@ function regenerateDailyStatsTable() {
                 else if (r.stakeIndex === 2) sum30d += r.amount;
             });
 
-            // 解锁分布
-            let unlock0_2 = 0, unlock2_7 = 0, unlock7_15 = 0, unlock15plus = 0;
+            // 解锁分布 - 修改为5个区间：0-2天、2-7天、7-15天、15-25天、>25天
+            let unlock0_2 = 0, unlock2_7 = 0, unlock7_15 = 0, unlock15_25 = 0, unlock25plus = 0;
             const nowSec = Math.floor(Date.now() / 1000);
             queryResults.forEach(r => {
                 const remain = r.unlockTime - nowSec;
-                if (remain <= 172800) unlock0_2 += r.amount;
-                else if (remain <= 604800) unlock2_7 += r.amount;
-                else if (remain <= 1296000) unlock7_15 += r.amount;
-                else unlock15plus += r.amount;
+                if (remain <= 172800) unlock0_2 += r.amount;                    // 0-2天 (2天=172800秒)
+                else if (remain <= 604800) unlock2_7 += r.amount;              // 2-7天 (7天=604800秒)
+                else if (remain <= 1296000) unlock7_15 += r.amount;            // 7-15天 (15天=1296000秒)
+                else if (remain <= 2160000) unlock15_25 += r.amount;           // 15-25天 (25天=2160000秒)
+                else unlock25plus += r.amount;                                 // >25天
             });
 
             const pieCtx = document.getElementById('pieChart')?.getContext('2d');
@@ -4765,11 +4781,11 @@ function regenerateDailyStatsTable() {
             unlockChart = new Chart(unlockCtx, {
                 type: 'bar',
                 data: {
-                    labels: ['0-2天', '2-7天', '7-15天', '>15天'],
+                    labels: ['0-2天', '2-7天', '7-15天', '15-25天', '>25天'],
                     datasets: [{
                         label: '可赎回金额 (USDT)',
-                        data: [unlock0_2, unlock2_7, unlock7_15, unlock15plus],
-                        backgroundColor: ['#f87171', '#fbbf24', '#60a5fa', '#a78bfa'],
+                        data: [unlock0_2, unlock2_7, unlock7_15, unlock15_25, unlock25plus],
+                        backgroundColor: ['#f87171', '#fbbf24', '#60a5fa', '#a78bfa', '#ec4899'],
                         borderRadius: 6
                     }]
                 },
@@ -4777,12 +4793,74 @@ function regenerateDailyStatsTable() {
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: { 
-                        y: { beginAtZero: true, grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
-                        x: { ticks: { color: '#94a3b8' } } 
+                        y: { 
+                            beginAtZero: true, 
+                            grid: { color: '#334155' }, 
+                            ticks: { color: '#94a3b8' } 
+                        },
+                        x: { 
+                            ticks: { color: '#94a3b8' } 
+                        } 
                     },
-                    plugins: { legend: { labels: { color: '#e2e8f0' } } }
+                    plugins: { 
+                        legend: { labels: { color: '#e2e8f0' } } 
+                    }
                 }
             });
+        }
+
+        // ================= 获取LP池中的USDT余额 =================
+        async function getLPPoolBalance() {
+            try {
+                // 创建USDT合约实例
+                const usdtContract = new ethers.Contract(CONFIG.USDT, USDT_ABI, stakingContract.runner);
+                
+                // 获取LP池地址的USDT余额
+                const balance = await callWithRetry(
+                    () => usdtContract.balanceOf(CONFIG.LP_POOL),
+                    "LP Pool USDT balanceOf"
+                );
+                
+                // USDT在BSC上是18位小数
+                const decimals = 18;
+                const formattedBalance = parseFloat(ethers.formatUnits(balance, decimals));
+                
+                console.log(`LP池USDT余额: ${formattedBalance}`);
+                return formattedBalance;
+            } catch (error) {
+                console.error("获取LP池USDT余额失败:", error);
+                return 0;
+            }
+        }
+
+        // ================= 刷新LP池余额 =================
+        async function refreshLPPool() {
+            if (!stakingContract) {
+                alert("❌ 合约未初始化");
+                return;
+            }
+            
+            try {
+                document.getElementById('refreshLPBtn').disabled = true;
+                document.getElementById('refreshLPBtn').innerText = '刷新中...';
+                
+                const lpBalance = await getLPPoolBalance();
+                stats.lpWithdrawable = lpBalance;
+                updateStats();
+                
+                // 保存到存储
+                saveToStorage();
+                
+                document.getElementById('refreshLPBtn').innerText = '💰 刷新LP池余额';
+                document.getElementById('refreshLPBtn').disabled = false;
+                
+                alert(`✅ LP池余额已刷新: ${lpBalance.toFixed(2)} USDT`);
+            } catch (error) {
+                console.error("刷新LP池余额失败:", error);
+                alert("❌ 刷新失败");
+                document.getElementById('refreshLPBtn').innerText = '💰 刷新LP池余额';
+                document.getElementById('refreshLPBtn').disabled = false;
+            }
         }
 
         // ================= 带重试的合约调用 =================
@@ -4930,8 +5008,18 @@ function regenerateDailyStatsTable() {
             stats = {
                 totalStaked: 0, totalStaked1d: 0, totalStaked15d: 0, totalStaked30d: 0,
                 count1d: 0, count15d: 0, count30d: 0,
-                unlock2d: 0, unlock7d: 0, unlock15d: 0
+                unlock2d: 0, unlock7d: 0, unlock15d: 0,
+                lpWithdrawable: 0
             };
+
+            // 获取LP池USDT余额
+            try {
+                const lpBalance = await getLPPoolBalance();
+                stats.lpWithdrawable = lpBalance;
+                console.log(`LP池可提现USDT: ${lpBalance}`);
+            } catch (error) {
+                console.error("获取LP池USDT余额失败:", error);
+            }
 
             const now = Math.floor(Date.now() / 1000);
             const limits = {
@@ -4997,6 +5085,7 @@ function regenerateDailyStatsTable() {
                 
                 updateStats();
                 
+                // 每批查询后稍微延迟，避免请求过快
                 await new Promise(r => setTimeout(r, 100));
             }
 
@@ -5070,6 +5159,16 @@ function regenerateDailyStatsTable() {
                 '7d': now + 604800,
                 '15d': now + 1296000
             };
+
+            // 获取LP池USDT余额（每次增量更新时也获取最新余额）
+            try {
+                const lpBalance = await getLPPoolBalance();
+                stats.lpWithdrawable = lpBalance;
+                console.log(`LP池可提现USDT: ${lpBalance}`);
+            } catch (error) {
+                console.error("获取LP池USDT余额失败:", error);
+                // 如果获取失败，保留原来的值
+            }
 
             let processed = 0;
             let newRecords = 0;

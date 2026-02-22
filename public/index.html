@@ -787,8 +787,8 @@
                         <div class="chart-range-selector">
                             <span class="range-btn" onclick="setTrendRange(7)">7天</span>
                             <span class="range-btn" onclick="setTrendRange(15)">15天</span>
-                            <span class="range-btn" onclick="setTrendRange(30)">30天</span>
-                            <span class="range-btn active" onclick="setTrendRange(90)">90天</span>
+                            <span class="range-btn active" onclick="setTrendRange(30)">30天</span>
+                            <span class="range-btn" onclick="setTrendRange(90)">90天</span>
                         </div>
                     </div>
                     <div class="chart-container">
@@ -4222,7 +4222,7 @@
         let dailyStartHour = 0; // 默认 UTC+0 00:00
         
         // 图表当前显示范围 (天)
-        let trendRange = 90; // 默认90天
+        let trendRange = 30; // 默认30天
         
         let stats = {
             totalStaked: 0, totalStaked1d: 0, totalStaked15d: 0, totalStaked30d: 0,
@@ -4286,7 +4286,7 @@
             
             // 默认激活90天按钮
             document.querySelectorAll('.range-btn').forEach(btn => {
-                if (btn.innerText.includes('90')) btn.classList.add('active');
+                if (btn.innerText.includes('30')) btn.classList.add('active');
             });
         });
 
